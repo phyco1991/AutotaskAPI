@@ -29,7 +29,8 @@
 .OUTPUTS
     none
 .NOTES
-    To-do: 
+    Each URI represents either a geographic zone or a sandbox/development instance of Autotask.
+    You can generally work out the Web Services URI from the URL you use to access the Autotask GUI (i.e. https://ww6.autotask.net would be https://webservices6.autotask.net)
 #>
 function Add-AutotaskBaseURI (
     [ValidateSet(

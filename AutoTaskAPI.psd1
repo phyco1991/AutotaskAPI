@@ -9,7 +9,7 @@
 @{
 
     # Script module or binary module file associated with this manifest.
-    RootModule        = '\AutotaskAPI.psm1'
+    RootModule        = 'AutotaskAPI.psm1'
     
     # Version number of this module.
     ModuleVersion     = '1.2.3'
@@ -73,6 +73,10 @@
         'Add-AutotaskBaseURI',
         'Add-AutotaskAPIAuth',
         'Get-AutotaskAPIResource',
+        'Get-AutotaskAPIResourceList',
+        'Get-AutotaskAPIResourceCapability',
+        'Get-AutotaskAPIEntityInfo',
+        'Get-AutotaskAPIPicklistValues',
         'New-AutotaskAPIResource',
         'Set-AutotaskAPIResource',
         'New-AutotaskBody',

@@ -1,6 +1,6 @@
 ﻿# AutotaskAPI PowerShell Module
 
-This is a PowerShell wrapper for the new Autotask REST API, released by Datto in version 2020.2. This API is a replacement of the SOAP API. The REST API is faster and easier to develop for, than the SOAP API. If you need to use the SOAP API for whatever reason, then check out the project [Autotask by ecitsolutions](https://github.com/ecitsolutions/Autotask). This is by far the best wrapper for the SOAP API.
+This is a PowerShell wrapper for the Autotask REST API, released by Datto in version 2020.2. This API is a replacement of the SOAP API. The REST API is faster and easier to develop for, than the SOAP API. If you need to use the SOAP API for whatever reason, then check out the project [Autotask by ecitsolutions](https://github.com/ecitsolutions/Autotask). This is by far the best wrapper for the SOAP API.
 
 For more information, check out the [Datto/Autotask](https://www.datto.com/integrations/lime-networks-b-v-cyberdrain-com) page about this module too.
 
@@ -208,4 +208,4 @@ Version 1.0 contains all you'd need to be able to query all the endpoints, but t
 - [x] Allow Simple Search strings instead of a JSON search filter
 - [ ] Convert API time to current timezone of the executed script. The same for date/time based queries.
 - [ ] Replace/improve new-autotask body with something more dynamic, allowing the use of the labels for picklists instead of having to enter data yourself.
-- [ ] Add example filters for each resource
+- [x] Add example filters for each resource
