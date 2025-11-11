@@ -60,7 +60,25 @@ With this Module, you can either use native JSON filters that are sent to the AP
 
 If you don't need more than one filter set, you can use *-SimpleSearch* instead. Simple search will build a single JSON statement for you. Simple filters doesn't support  multiple statements and is therefor limited to one single filter (e.g. all companies with "isactive = true").
 
-You can find examples for filters below. In addition the [Autotask documentation about Basic Queries](https://www.autotask.net/help/developerhelp/Content/APIs/REST/API_Calls/REST_Basic_Query_Calls.htm) contains a documentation of all keywords and further examples, that might help.
+You can find examples for filters below. In addition the [Autotask documentation about Basic Queries](https://www.autotask.net/help/developerhelp/Content/APIs/REST/API_Calls/REST_Basic_Query_Calls.htm) contains a documentation of all keywords and further examples that might help. You can also call a list of available fields via the Get-AutotaskAPIEntityInfo function.
+
+### Functions
+
+List of all functions that can be called from the module, and their purpose.
+
+```powershell
+Add-AutotaskAPIAuth # Adds the API/Application key and credentials (required to use any other functions)
+Add-AutotaskBaseURI # Sets the Base URI if it is not auto-detected from the above
+Get-AutotaskAPIEntityInfo # Gets a list of available entities from a specific resource in the API
+Get-AutotaskAPIPicklistValues # Gets a list of available values for a specified picklist field from a specific resource in the API
+Get-AutotaskAPIResource # Gets a specified resource in the API
+Get-AutotaskAPIResourceCapability # Gets a list of capabilities for a specific resource in the API
+Get-AutotaskAPIResourceList # Gets a list of available resources in the API
+New-AutotaskAPIResource # Creates a new resource in the API to the supplied object
+New-AutotaskBody # Creates a pscustomobject to send to api
+Remove-AutotaskAPIResource # Deletes a resource in the API to the supplied object
+Set-AutotaskAPIResource # Sets a resource in the API to the supplied object
+```
 
 ## Examples
 
@@ -100,6 +118,12 @@ To get only child 7 in company id 1234
 
 ```powershell
 Get-AutotaskAPIResource -Resource CompanyAlertsChild -ID 29683578 -ChildID 7
+```
+
+Similarly for tickets:
+
+```powershell
+Get-AutotaskAPIResource -Resource Tickets -SimpleSearch "ticketnumber eq T20251111.0001"
 ```
 
 ### Combine Data with other Modules
