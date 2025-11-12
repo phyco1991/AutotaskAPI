@@ -32,7 +32,7 @@ function Add-AutotaskAPIAuth (
         $Version = (Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation").apiversions | select-object -last 1
         $AutotaskBaseURI = Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/$($Version)/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
         write-host "Setting AutotaskBaseURI to $($AutotaskBaseURI.url) using version $Version" -ForegroundColor green
-        Add-AutotaskBaseURI -BaseURI $AutotaskBaseURI.url.Trim('/')
+        Add-AutotaskBaseURI -BaseURI $AutotaskBaseURI
     }
     catch {
         write-host "Could not Retrieve baseuri. E-mail address might be incorrect. You can manually add the baseuri via the Add-AutotaskBaseURI cmdlet. $($_.Exception.Message)" -ForegroundColor red

@@ -39,8 +39,19 @@ function New-AutotaskBody {
         if ( !$ResourceURL ) {
             $ResourceURL = (($Script:Queries | Where-Object { $_.'Patch' -eq $Resource }).Name | Select-Object -first 1) -replace '/query', '' | Select-Object -first 1
         }
+        $ResourceURL = $ResourceURL -replace '(?i)/?{parentid}/?', ''
         try {
             $resource = $PSBoundParameters.resource
+            $fieldsUri = "$($Script:AutotaskBaseURI.TrimEnd('/'))/$($ResourceURL.TrimStart('/'))/entityInformation/fields"
+            $udfUri    = "$($Script:AutotaskBaseURI.TrimEnd('/'))/$($ResourceURL.TrimStart('/'))/entityInformation/userdefinedfields"
+            if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue') {
+                Write-Host "=========================" -ForegroundColor DarkGray
+                Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
+                Write-Host "Fields   : $fieldsUri"
+                Write-Host "UDFs     : $udfUri"
+                Write-Host "Headers  :" ($Headers | ConvertTo-Json -Compress)
+                Write-Host "=========================" -ForegroundColor DarkGray
+            }
             $ObjectTemplate = (Invoke-RestMethod -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/fields" -headers $Headers -Method Get).fields
             try {
                 $UDFs = (Invoke-RestMethod -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/userdefinedfields" -headers $Headers -Method Get).fields | select-object name, value

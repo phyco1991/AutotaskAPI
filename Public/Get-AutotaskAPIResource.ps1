@@ -112,6 +112,15 @@ function Get-AutotaskAPIResource {
         # Write-Host "Final SetURI:" $SetURI
         try {
             do {
+                if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue') {
+            Write-Host "=========================" -ForegroundColor DarkGray
+            Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
+            Write-Host "Method : $Method"
+            Write-Host "URL    : $SetURI"
+            Write-Host "Headers:" ($Headers | ConvertTo-Json -Compress)
+            if ($Body) { Write-Host "Body   :" ($Body | ConvertTo-Json -Compress) }
+            Write-Host "=========================" -ForegroundColor DarkGray
+        }
                 switch ($Method) {
                     GET {$items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get}
                     POST {$items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Post -Body $Body}
