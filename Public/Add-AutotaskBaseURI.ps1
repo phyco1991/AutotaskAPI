@@ -38,12 +38,13 @@ function Add-AutotaskBaseURI {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $true)]
-        [ValidatePattern('^https://(webservices\d+|prde|pres)\.autotask\.net/ATServicesRest(/V\d+\.\d+)?/?$')]
+        [ValidatePattern('(?i)^https://(webservices\d+|prde|pres)\.autotask\.net/atservicesrest(/V\d+\.\d+)?/?$')]
         [string]$BaseURI
     )
 
+    $root = $BaseURI.Trim()
     $root = $BaseURI.TrimEnd('/')
-    $root = $root -replace '/V\d+\.\d+$', ''   # strip trailing version if present
+    $root = $root -replace '(?i)/V\d+\.\d+$',''   # strip trailing version if present
     $Script:AutotaskBaseURI = $root
 
     Write-Host "Setting API resource parameters. This may take a moment." -ForegroundColor Green
