@@ -120,10 +120,18 @@ To get only child 7 in company id 1234
 Get-AutotaskAPIResource -Resource CompanyAlertsChild -ID 29683578 -ChildID 7
 ```
 
-Similarly for tickets:
+Similarly for tickets or configuration items
+
+To get the ticket with number T20251111.0001:
 
 ```powershell
 Get-AutotaskAPIResource -Resource Tickets -SimpleSearch "ticketnumber eq T20251111.0001"
+```
+
+To get all configuration items with a specific UDF value:
+
+```powershell
+Get-AutotaskAPIResource -Resource ConfigurationItems -SimpleSearch '"UDF Name" eq "UDF Value"'
 ```
 
 ### Combine Data with other Modules
