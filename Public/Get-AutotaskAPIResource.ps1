@@ -32,55 +32,126 @@ function Get-AutotaskAPIResource {
         [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
         [Parameter(ValueFromPipelineByPropertyName = $true)]
         [String]$ID,
+
         [Parameter(ParameterSetName = 'ID', Mandatory = $false)]
         [String]$ChildID,
+
         [Parameter(ParameterSetName = 'SearchQuery', Mandatory = $true)]
         [String]$SearchQuery,
+
         [Parameter(ParameterSetName = 'SearchQuery', Mandatory = $false)]
         [ValidateSet("GET", "POST")]
         [String]$Method,
+
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $true)]
-        [String]$SimpleSearch
+        [String]$SimpleSearch,
+
+        # Explicit UDF flag for SimpleSearch
+        [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $false)]
+        [switch]$Udf
     )
+
     DynamicParam {
         $Script:GetParameter
     }
+
     begin {
         if (!$Script:AutotaskAuthHeader -or !$Script:AutotaskBaseURI) {
-            Write-Warning "You must first run Add-AutotaskAPIAuth before calling any other cmdlets" 
-            break 
+            Write-Warning "You must first run Add-AutotaskAPIAuth before calling any other cmdlets"
+            break
         }
+
         $resource = $PSBoundParameters.resource
-        $headers = $Script:AutotaskAuthHeader
+        $headers  = $Script:AutotaskAuthHeader
+
         $Script:Index = $Script:Queries | Group-Object Index -AsHashTable -AsString
-        $ResourceURL = @(($Script:Index[$resource] | Where-Object { $_.Get -eq $resource }))[0]
-        $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}") 
+        $ResourceURL  = @(($Script:Index[$resource] | Where-Object { $_.Get -eq $resource }))[0]
+
+        $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
         # Fix path to InvoicePDF URL, must be unique vs. /Invoices in Swagger file
         $ResourceURL.name = $ResourceURL.name.replace("V1.0/InvoicePDF", "V1.0/Invoices/{id}/InvoicePDF")
+
+        # UDF metadata lookup
+        $udfNames = @()
+        try {
+            $udfNames = Get-AutotaskUdfNames -Resource $resource
+            Write-Verbose "User defined fields for $resource $($udfNames -join ', ')"
+        }
+        catch {
+            Write-Verbose "Could not build UDF index for '$resource': $_"
+            $udfNames = @()
+        }
+
+        # SimpleSearch handling
         if ($SimpleSearch) {
-            $SearchOps = $SimpleSearch -split ' '
+            # Split into tokens, but keep quoted strings together
+            $tokens = [regex]::Matches($SimpleSearch, '("[^"]+"|\S+)') | ForEach-Object { $_.Value }
+
+            if ($tokens.Count -lt 3) {
+                throw "SimpleSearch must be in the form: <field> <op> <value> (with quotes around field/value if they contain spaces)"
+            }
+
+            $field = $tokens[0].Trim('"')
+            $op    = $tokens[1]
+            $value = ($tokens[2..($tokens.Count - 1)] -join ' ').Trim('"')
+
+            $filter = @{
+                field = $field
+                op    = $op
+                value = $value
+            }
+
+            # Mark as UDF if:
+            #  -Udf is specified
+            #  The field matches known UDF metadata
+            if ($Udf.IsPresent -or $udfNames -contains $field) {
+                # UDF true must be specified as a string
+                $filter.udf = "true"
+            }
+
             $SearchQuery = ConvertTo-Json @{
-                filter = @(@{
-                        field = $SearchOps[0]
-                        op    = $SearchOps[1]
-                        value = $SearchOps | Select-Object -Skip 2
-                    })
+                filter = @($filter)
             } -Compress
+        }
+
+        # SearchQuery handling
+        if ($SearchQuery) {
+            try {
+                $sqObj = $SearchQuery | ConvertFrom-Json
+
+                if ($sqObj.filter) {
+                    foreach ($f in $sqObj.filter) {
+                        if ($null -ne $f.field -and $udfNames -contains $f.field) {
+                            if (-not ($f.PSObject.Properties.Name -contains 'udf')) {
+                                # UDF true must be specified as a string
+                                $f | Add-Member -NotePropertyName 'udf' -NotePropertyValue "true"
+                            }
+                        }
+                    }
+
+                    $SearchQuery = $sqObj | ConvertTo-Json -Depth 10 -Compress
+                }
+            }
+            catch {
+                Write-Verbose "Failed to parse/augment SearchQuery JSON for UDF detection: $_"
+            }
         }
     }
 
     process {
-        if ($resource -like "*child*" -and $SearchQuery) { 
+        if ($resource -like "*child*" -and $SearchQuery) {
             Write-Warning "You cannot perform a JSON Search on child items. To find child items, use the parent ID."
             break
         }
+
         if ($ID) {
-            $ResourceURL = ("$($ResourceURL.name)" -replace '{parentid}', "$($ID)") 
+            $ResourceURL = ("$($ResourceURL.name)" -replace '{parentid}', "$($ID)")
         }
-        if ($ChildID) { 
+        if ($ChildID) {
             $ResourceURL = ("$($ResourceURL)/$ChildID")
         }
-        if ($SearchQuery) { 
+
+        if ($SearchQuery) {
             switch ($Method) {
                 GET {
                     $ResourceURL = ("$($ResourceURL.name)/query?search=$SearchQuery" -replace '{PARENTID}', '')
@@ -90,60 +161,56 @@ function Get-AutotaskAPIResource {
                     $body = $SearchQuery
                 }
                 Default {
-                    if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048){
-                        #15 characters for "//query?search="
-                        #TODO: Calculation does not include Overwritten ParentID and is currently a better estimation. Therefore a "safe factor" of +120 chars is used
-                        #100 characters for Call of next page (Including "paging={"pageSize":500,"previousIds":[<ID>],"nextIds":[<ID>]}&" UTF-8 encoded)
+                    if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048) {
                         Write-Information "Using POST-Request as Request exceeded limit of 2100 characters. You can use -Method GET/POST to set a fixed Method."
                         $ResourceURL = ("$($ResourceURL.name)/query" -replace '{PARENTID}', '')
-                        $body = $SearchQuery
+                        $body   = $SearchQuery
                         $Method = "POST"
-                    } else {
+                    }
+                    else {
                         $ResourceURL = ("$($ResourceURL.name)/query?search=$SearchQuery" -replace '{PARENTID}', '')
                     }
                 }
-            } 
+            }
         }
-        # Write-Host "ResourceURL BEFORE IF:" $ResourceURL
-        if ($resource -eq "InvoicePDF" -and $ID) { 
-            $ResourceURL = ("$($ResourceURL)" -replace '{id}', "$($ID)") 
+
+        if ($resource -eq "InvoicePDF" -and $ID) {
+            $ResourceURL = ("$($ResourceURL)" -replace '{id}', "$($ID)")
         }
-        $SetURI = "$($Script:AutotaskBaseURI)$($ResourceURL)" # Removed separating / as it was doubling in output (but worked)
-        # Write-Host "Final SetURI:" $SetURI
+
+        $SetURI = "$($Script:AutotaskBaseURI)$($ResourceURL)"
+
         try {
             do {
                 if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue') {
-            Write-Host "=========================" -ForegroundColor DarkGray
-            Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
-            Write-Host "Method : $Method"
-            Write-Host "URL    : $SetURI"
-            Write-Host "Headers:" ($Headers | ConvertTo-Json -Compress)
-            if ($Body) { Write-Host "Body   :" ($Body | ConvertTo-Json -Compress) }
-            Write-Host "=========================" -ForegroundColor DarkGray
-        }
-                switch ($Method) {
-                    GET {$items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get}
-                    POST {$items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Post -Body $Body}
-                    Default {$items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get}
+                    Write-Host "=========================" -ForegroundColor DarkGray
+                    Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
+                    Write-Host "Method : $Method"
+                    Write-Host "URL    : $SetURI"
+                    Write-Host "Headers:" ($Headers | ConvertTo-Json -Compress)
+                    if ($Body) { Write-Host "Body   :" $Body }
+                    Write-Host "=========================" -ForegroundColor DarkGray
                 }
+
+                switch ($Method) {
+                    GET    { $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get }
+                    POST   { $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Post -Body $Body }
+                    Default{ $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get }
+                }
+
                 $SetURI = $items.PageDetails.NextPageUrl
-                #[System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([datetime]::UtcNow, (get-timezone).id)
-                # Returns blank unless $items itself is returned for InvoicePDF function
-                if($resource -eq "InvoicePDF") {
+
+                if ($resource -eq "InvoicePDF") {
                     return $items
                 }
-            
-                if ($items.items) { 
-                    foreach ($item in $items.items) {
-                        $item
-                    }
+
+                if ($items.items) {
+                    foreach ($item in $items.items) { $item }
                 }
                 if ($items.item) {
-                    foreach ($item in $items.item) {
-                        $item
-                    }
-                    
-                }  
+                    foreach ($item in $items.item) { $item }
+                }
+
             } while ($null -ne $SetURI)
         }
         catch {
@@ -153,13 +220,12 @@ function Get-AutotaskAPIResource {
                 if ($streamReader.ReadToEnd() -like '*{*') { $ErrResp = $streamReader.ReadToEnd() | ConvertFrom-Json }
                 $streamReader.Close()
             }
-            if ($ErrResp.errors) { 
-                Write-Error "API Error: $($ErrResp.errors)" 
+            if ($ErrResp.errors) {
+                Write-Error "API Error: $($ErrResp.errors)"
             }
             else {
                 Write-Error "Connecting to the Autotask API failed. $($_.Exception.Message)"
             }
         }
-
     }
 }
