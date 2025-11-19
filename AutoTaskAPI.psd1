@@ -77,6 +77,7 @@
         'Get-AutotaskAPIResourceCapability',
         'Get-AutotaskAPIEntityInfo',
         'Get-AutotaskAPIPicklistValues',
+        'Get-AutotaskAPIRecurringServiceUnits',
         'New-AutotaskAPIResource',
         'Set-AutotaskAPIResource',
         'New-AutotaskBody',

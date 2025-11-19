@@ -83,7 +83,7 @@ function Get-AutotaskAPIResource {
                         $pickMeta       = Get-AutotaskPicklistMeta -Entity $resource
                         $picklistFields = $pickMeta.PicklistFields
                         $picklistMap    = $pickMeta.PicklistMap
-                        Write-Verbose "Picklist fields for $resource $($picklistFields -join ', ')"
+                        Write-Verbose "Picklist fields for $resource include: $($picklistFields -join ', ')"
                     }
                     catch {
                         Write-Verbose "Failed to get picklist metadata for '$resource': $_"
@@ -96,7 +96,7 @@ function Get-AutotaskAPIResource {
         $udfNames = @()
         try {
             $udfNames = Get-AutotaskUdfNames -Resource $resource
-            Write-Verbose "User defined fields for $resource $($udfNames -join ', ')"
+            Write-Verbose "User defined fields for $resource include: $($udfNames -join ', ')"
         }
         catch {
             Write-Verbose "Could not build UDF index for '$resource': $_"
@@ -204,11 +204,27 @@ function Get-AutotaskAPIResource {
         try {
             do {
                 if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue') {
+                    $safeHeaders = @{}
+                    foreach ($key in $Headers.Keys) {
+                        if ($key -eq 'Secret') {
+                            # Mask the secret value from Verbose output
+                            $val = $Headers[$key]
+                            if ($val -and $val.Length -gt 4) {
+                                $safeHeaders[$key] = ($val.Substring(0,2) + '*REDACTED*' + $val.Substring($val.Length-2,2))
+                            } else {
+                                $safeHeaders[$key] = '*REDACTED*'
+                            }
+                        }
+                        else {
+                            $safeHeaders[$key] = $Headers[$key]
+                        }
+                    }
+                    $effectiveMethod = if ([string]::IsNullOrWhiteSpace($Method)) { 'GET' } else { $Method }
                     Write-Host "=========================" -ForegroundColor DarkGray
                     Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
-                    Write-Host "Method : $Method"
+                    Write-Host "Method : $effectiveMethod"
                     Write-Host "URL    : $SetURI"
-                    Write-Host "Headers:" ($Headers | ConvertTo-Json -Compress)
+                    Write-Host "Headers:" ($safeHeaders | ConvertTo-Json -Compress)
                     if ($Body) { Write-Host "Body   :" $Body }
                     Write-Host "=========================" -ForegroundColor DarkGray
                 }
