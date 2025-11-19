@@ -2,7 +2,7 @@
 .SYNOPSIS
     Used to gather an index of UDF Names associated with a specific entity
 .DESCRIPTION
-    TBA
+    When fields are queried using Get-AutotaskAPIResource and they are a UDF, this allows the function to automatically adjust the API call to resolve them (without needing to specify udf=true in your filter)
 .EXAMPLE
     PS C:\> Get-AutotaskUdfNames -Resource ConfigurationItems
     Stores an index of all UDF names that relate to the ConfigurationItems entity

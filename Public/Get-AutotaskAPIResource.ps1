@@ -48,7 +48,11 @@ function Get-AutotaskAPIResource {
 
         # Explicit UDF flag for SimpleSearch
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $false)]
-        [switch]$Udf
+        [switch]$Udf,
+
+        # Query the picklist index to resolve labels from value
+        [Parameter()]
+        [switch]$ResolveLabels
     )
 
     DynamicParam {
@@ -70,6 +74,23 @@ function Get-AutotaskAPIResource {
         $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
         # Fix path to InvoicePDF URL, must be unique vs. /Invoices in Swagger file
         $ResourceURL.name = $ResourceURL.name.replace("V1.0/InvoicePDF", "V1.0/Invoices/{id}/InvoicePDF")
+
+        # Picklist metadata lookup
+        $picklistFields = @()
+        $picklistMap    = @{}
+        if ($ResolveLabels.IsPresent) {
+                try {
+                        $pickMeta       = Get-AutotaskPicklistMeta -Entity $resource
+                        $picklistFields = $pickMeta.PicklistFields
+                        $picklistMap    = $pickMeta.PicklistMap
+                        Write-Verbose "Picklist fields for $resource $($picklistFields -join ', ')"
+                    }
+                    catch {
+                        Write-Verbose "Failed to get picklist metadata for '$resource': $_"
+                        $picklistFields = @()
+                        $picklistMap    = @{}
+                    }
+                }
 
         # UDF metadata lookup
         $udfNames = @()
@@ -205,10 +226,41 @@ function Get-AutotaskAPIResource {
                 }
 
                 if ($items.items) {
-                    foreach ($item in $items.items) { $item }
+                    foreach ($item in $items.items) {
+                        if ($ResolveLabels.IsPresent -and $picklistFields -and $picklistMap) {
+                            foreach ($fieldName in $picklistFields) {
+                                # Skip if this object doesn't even have that property
+                                if (-not ($item.PSObject.Properties.Name -contains $fieldName)) { continue }
+                                $rawValue = $item.$fieldName
+                                if ($null -eq $rawValue -or $rawValue -eq '') { continue }
+                                $fieldMap = $picklistMap[$fieldName]
+                                if (-not $fieldMap) { continue }
+                                $label = $fieldMap["$rawValue"]
+                                if (-not $label) { continue }
+                                # Overwrite numeric picklist value output with the label
+                                $item.$fieldName = $label
+                            }
+                        }
+                        $item
+                    }
                 }
+
                 if ($items.item) {
-                    foreach ($item in $items.item) { $item }
+                    foreach ($item in $items.item) {
+                        if ($ResolveLabels.IsPresent -and $picklistFields -and $picklistMap) {
+                            foreach ($fieldName in $picklistFields) {
+                                if (-not ($item.PSObject.Properties.Name -contains $fieldName)) { continue }
+                                $rawValue = $item.$fieldName
+                                if ($null -eq $rawValue -or $rawValue -eq '') { continue }
+                                $fieldMap = $picklistMap[$fieldName]
+                                if (-not $fieldMap) { continue }
+                                $label = $fieldMap["$rawValue"]
+                                if (-not $label) { continue }
+                                $item.$fieldName = $label
+                            }
+                        }
+                        $item
+                    }
                 }
 
             } while ($null -ne $SetURI)
