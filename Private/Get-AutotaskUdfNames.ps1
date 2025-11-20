@@ -41,8 +41,8 @@ function Get-AutotaskUdfNames {
 
         $names = @()
         foreach ($u in $udfs) {
-            if ($u.name)  { $names += $u.name }
-            if ($u.label) { $names += $u.label }
+            if ($u.label)  { $names += $u.label }
+            elseif ($u.name) { $names += $u.name }
         }
 
         Write-Verbose "Found $($names.Count) UDF field names for '$Resource'."

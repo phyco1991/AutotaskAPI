@@ -165,8 +165,8 @@ function Get-AutotaskAPIRecurringServiceUnits {
     $allUnits = @()
     $csIds    = $allContractServices.id | Sort-Object -Unique
 
-    # Autotask "last modified" field name for ContractServiceUnits.
-    $lastModifiedField = 'lastActivityDate'
+    # Autotask "last modified" field name for Contracts.
+    $lastModifiedField = 'lastModifiedDateTime'
 
     # Format ChangedSince for the API (ISO 8601)
     $changedSinceString = $null
@@ -282,16 +282,15 @@ function Get-AutotaskAPIRecurringServiceUnits {
         return $detailRows
     }
 
-    # Summary mode: collapse to Company + ServiceCode (+ PeriodType),
-    # summing Units and taking latest LastActivity.
+    # Summary mode: collapse to Company + ServiceName (+ PeriodType),
     $grouped = $detailRows |
-        Group-Object CompanyId, CompanyName, ServiceCode, ServiceName, PeriodType
+        Group-Object CompanyId, CompanyName, ServiceName, PeriodType
 
     foreach ($g in $grouped) {
         $any = $g.Group | Select-Object -First 1
 
         $totalUnits  = ($g.Group | Measure-Object Units -Sum).Sum
-        $lastAct     = ($g.Group | Measure-Object LastActivity -Maximum).Maximum
+        $lastAct     = ($g.Group | Measure-Object lastModifiedDateTime -Maximum).Maximum
 
         [PSCustomObject]@{
             CompanyId    = $any.CompanyId

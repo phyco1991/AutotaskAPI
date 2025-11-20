@@ -175,21 +175,21 @@ function Get-AutotaskAPIResource {
         if ($SearchQuery) {
             switch ($Method) {
                 GET {
-                    $ResourceURL = ("$($ResourceURL.name)/query?search=$SearchQuery" -replace '{PARENTID}', '')
+                    $ResourceURL = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
                 }
                 POST {
-                    $ResourceURL = ("$($ResourceURL.name)/query" -replace '{PARENTID}', '')
+                    $ResourceURL = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
                     $body = $SearchQuery
                 }
                 Default {
                     if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048) {
                         Write-Information "Using POST-Request as Request exceeded limit of 2100 characters. You can use -Method GET/POST to set a fixed Method."
-                        $ResourceURL = ("$($ResourceURL.name)/query" -replace '{PARENTID}', '')
+                        $ResourceURL = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
                         $body   = $SearchQuery
                         $Method = "POST"
                     }
                     else {
-                        $ResourceURL = ("$($ResourceURL.name)/query?search=$SearchQuery" -replace '{PARENTID}', '')
+                        $ResourceURL = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
                     }
                 }
             }
