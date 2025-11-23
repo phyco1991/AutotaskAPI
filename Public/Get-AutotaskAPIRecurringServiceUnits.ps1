@@ -2,7 +2,7 @@
 .SYNOPSIS
     Used to gather output of recurring services
 .DESCRIPTION
-    TBA
+    Queries the Contracts, ContractServices, and ContractServiceUnits entities to obtain all services against recurring service contracts including their quantity, period type, and other key information.
 .EXAMPLE
     PS C:\> Get-AutotaskRecurringServiceUnits | Select-Object CompanyName, ContractName, ServiceName, ServiceCode, Units, PeriodType
     Provides a list of all services on active Recurring Services contracts, with quantity and period type.
@@ -34,14 +34,14 @@ function Get-AutotaskAPIRecurringServiceUnits {
         # Contract category filter (single ID).
         [int]$ContractCategoryId,
 
-        # Only return rows where the ContractServiceUnits row has changed since this time
+        # Only return rows where the Contract row has changed since this time
         [datetime]$ChangedSince,
 
         # If set, PeriodType (and other picklists on Services) will be labels instead of numeric values
         [switch]$PeriodTypeAsLabel,
 
         # Detail: one row per ContractServiceUnits entry (default)
-        # Summary: grouped by Company + ServiceCode (+ PeriodType), Units summed
+        # Summary: grouped by Company + ServiceName (+ PeriodType), Units summed
         [ValidateSet('Detail', 'Summary')]
         [string]$Mode = 'Detail'
     )
@@ -68,7 +68,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         }
     }
 
-    # Contract category
+    # Contract category (optional)
     if ($ContractCategoryId) {
         $contractFilter += @{
             field = 'contractCategory'
@@ -77,6 +77,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         }
     }
 
+    # Contract filter by CompanyId(s)
     if ($CompanyId) {
         foreach ($cid in $CompanyId) {
             $contractFilter += @{
@@ -87,6 +88,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         }
     }
 
+    # Contract filter by ContractId(s)
     if ($ContractId) {
         foreach ($id in $ContractId) {
             $contractFilter += @{
@@ -97,13 +99,24 @@ function Get-AutotaskAPIRecurringServiceUnits {
         }
     }
 
+    # Contract delta filter (ChangedSince)
+    if ($ChangedSince) {
+        $changedSinceString = $ChangedSince.ToUniversalTime().ToString("o")
+        $contractFilter += @{
+            field = 'lastModifiedDateTime'
+            op    = 'gte'
+            value = $changedSinceString
+        }
+        Write-Verbose "Filtering Contracts where lastModifiedDateTime >= $changedSinceString"
+    }
+
     if (-not $contractFilter) {
         Write-Verbose "No contract filter supplied; getting all contracts (this is unlikely with current defaults)."
-        $contracts = Get-AutotaskAPIResource -Resource Contracts
+        $contracts = Get-AutotaskAPIResource -Resource Contracts -LocalTime
     }
     else {
         $contractQuery = @{ filter = $contractFilter } | ConvertTo-Json -Compress
-        $contracts     = Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery
+        $contracts     = Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery -LocalTime
     }
 
     if (-not $contracts) {
@@ -129,10 +142,12 @@ function Get-AutotaskAPIRecurringServiceUnits {
     foreach ($cid in $companyIds) {
         $companies += Get-AutotaskAPIResource -Resource Companies -SimpleSearch "id eq $cid"
     }
+
     $companyIndex = @{}
     foreach ($co in $companies) {
         $companyIndex[$co.id] = $co
     }
+
     Write-Verbose "Found $($companies.Count) Companies."
 
     # Get ContractServices for the contracts
@@ -165,41 +180,9 @@ function Get-AutotaskAPIRecurringServiceUnits {
     $allUnits = @()
     $csIds    = $allContractServices.id | Sort-Object -Unique
 
-    # Autotask "last modified" field name for Contracts.
-    $lastModifiedField = 'lastModifiedDateTime'
-
-    # Format ChangedSince for the API (ISO 8601)
-    $changedSinceString = $null
-    if ($ChangedSince) {
-        $changedSinceString = $ChangedSince.ToUniversalTime().ToString("o")
-        Write-Verbose "Filtering ContractServiceUnits where $lastModifiedField >= $changedSinceString"
-    }
-
     foreach ($csid in $csIds) {
-        if ($changedSinceString) {
-            # Use SearchQuery to AND contractServiceID + lastActivityDate >= ChangedSince
-            $filter = @(
-                @{
-                    field = 'contractServiceID'
-                    op    = 'eq'
-                    value = $csid
-                },
-                @{
-                    field = $lastModifiedField
-                    op    = 'gte'
-                    value = $changedSinceString
-                }
-            )
-
-            $search = @{ filter = $filter } | ConvertTo-Json -Compress
-
-            $allUnits += Get-AutotaskAPIResource -Resource ContractServiceUnits -SearchQuery $search
-        }
-        else {
-            # No delta filter – just pull all units for this ContractService
-            $allUnits += Get-AutotaskAPIResource -Resource ContractServiceUnits `
-                -SimpleSearch "contractServiceID eq $csid"
-        }
+        $allUnits += Get-AutotaskAPIResource -Resource ContractServiceUnits `
+            -SimpleSearch "contractServiceID eq $csid"
     }
 
     if (-not $allUnits) {
@@ -243,10 +226,12 @@ function Get-AutotaskAPIRecurringServiceUnits {
         if (-not $cs) { continue }
 
         $contract = $contractIndex[$cs.contractID]
-        $svc      = $serviceIndex[$cs.serviceID]
-        $company  = $companyIndex[$contract.companyID]
+        if (-not $contract) { continue }
 
-        if (-not $contract -or -not $svc) { continue }
+        $svc     = $serviceIndex[$cs.serviceID]
+        $company = $companyIndex[$contract.companyID]
+
+        if (-not $svc) { continue }
 
         $detailRows += [PSCustomObject]@{
             CompanyId      = $contract.companyID
@@ -267,7 +252,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
 
             Units          = $u.units
             EffectiveDate  = $u.effectiveDate
-            LastActivity   = $u.$lastModifiedField
+            LastActivity   = $contract.lastModifiedDateTime
         }
     }
 
@@ -276,21 +261,25 @@ function Get-AutotaskAPIRecurringServiceUnits {
         return
     }
 
-    # Output base on mode parameter (default to Detail)
+    # Output based on Mode parameter (default to Detail)
 
     if ($Mode -eq 'Detail') {
         return $detailRows
     }
 
-    # Summary mode: collapse to Company + ServiceName (+ PeriodType),
+    # Summary mode: collapse to Company + ServiceName (+ PeriodType)
+
     $grouped = $detailRows |
         Group-Object CompanyId, CompanyName, ServiceName, PeriodType
 
     foreach ($g in $grouped) {
         $any = $g.Group | Select-Object -First 1
 
-        $totalUnits  = ($g.Group | Measure-Object Units -Sum).Sum
-        $lastAct     = ($g.Group | Measure-Object lastModifiedDateTime -Maximum).Maximum
+        # Sum Units across all rows in this group
+        $totalUnits = ($g.Group | Measure-Object -Property Units -Sum).Sum
+
+        # Latest LastActivity across contributing rows
+        $lastAct = ($g.Group | Measure-Object -Property LastActivity -Maximum).Maximum
 
         [PSCustomObject]@{
             CompanyId    = $any.CompanyId

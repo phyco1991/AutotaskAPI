@@ -21,6 +21,9 @@
     -SearchQuery: JSON search filter.
     -Method: Forces a GET or POST Request
     -SimpleSearch: a simple search filter, e.g. name eq Lime
+    -Udf: Forces any query to be checked against the Udfs belonging to the entity
+    -ResolveLabels: Resolves picklist field IDs to their label value
+    -LocalTime: Any date/time responses will be returned in the local user time, rather than the default UTC
 .OUTPUTS
     none
 .NOTES
@@ -52,7 +55,10 @@ function Get-AutotaskAPIResource {
 
         # Query the picklist index to resolve labels from value
         [Parameter()]
-        [switch]$ResolveLabels
+        [switch]$ResolveLabels,
+
+        # Convert output from UTC to local user time & date values
+        [switch]$LocalTime
     )
 
     DynamicParam {
@@ -257,6 +263,32 @@ function Get-AutotaskAPIResource {
                                 $item.$fieldName = $label
                             }
                         }
+                        if ($LocalTime) {
+                            foreach ($prop in $item.PSObject.Properties) {
+                                $value = $prop.Value
+                                if ($value -is [datetime]) {
+                                    $dt = [datetime]$value
+                                    if ($dt.Kind -ne [System.DateTimeKind]::Utc) {
+                                        $dt = [System.DateTime]::SpecifyKind($dt, [System.DateTimeKind]::Utc)
+                                    }
+                                    $prop.Value = $dt.ToLocalTime()
+                                    continue
+                                }
+                                if ($value -is [string] -and $value -match '^\d{4}-\d{2}-\d{2}T.*Z$') {
+                                    try {
+                                        $dt = [datetime]::Parse(
+                                            $value,
+                                            [System.Globalization.CultureInfo]::InvariantCulture,
+                                            [System.Globalization.DateTimeStyles]::AssumeUniversal
+                                            )
+                                            $prop.Value = $dt.ToLocalTime()
+                                        }
+                                        catch {
+                                            # If parsing fails, don't change the output
+                                            }
+                                        }
+                            }
+                        }
                         $item
                     }
                 }
@@ -273,6 +305,32 @@ function Get-AutotaskAPIResource {
                                 $label = $fieldMap["$rawValue"]
                                 if (-not $label) { continue }
                                 $item.$fieldName = $label
+                            }
+                        }
+                        if ($LocalTime) {
+                            foreach ($prop in $item.PSObject.Properties) {
+                                $value = $prop.Value
+                                if ($value -is [datetime]) {
+                                    $dt = [datetime]$value
+                                    if ($dt.Kind -ne [System.DateTimeKind]::Utc) {
+                                        $dt = [System.DateTime]::SpecifyKind($dt, [System.DateTimeKind]::Utc)
+                                    }
+                                    $prop.Value = $dt.ToLocalTime()
+                                    continue
+                                }
+                                if ($value -is [string] -and $value -match '^\d{4}-\d{2}-\d{2}T.*Z$') {
+                                    try {
+                                        $dt = [datetime]::Parse(
+                                            $value,
+                                            [System.Globalization.CultureInfo]::InvariantCulture,
+                                            [System.Globalization.DateTimeStyles]::AssumeUniversal
+                                            )
+                                            $prop.Value = $dt.ToLocalTime()
+                                        }
+                                        catch {
+                                            # If parsing fails, don't change the output
+                                        }
+                                    }
                             }
                         }
                         $item
