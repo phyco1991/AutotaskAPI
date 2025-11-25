@@ -24,6 +24,7 @@
     -Udf: Forces any query to be checked against the Udfs belonging to the entity
     -ResolveLabels: Resolves picklist field IDs to their label value
     -LocalTime: Any date/time responses will be returned in the local user time, rather than the default UTC
+    -Base: Queries the base endpoint without any search filter. Used for entities where this is required such as ZoneInformation
 .OUTPUTS
     none
 .NOTES
@@ -49,6 +50,9 @@ function Get-AutotaskAPIResource {
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $true)]
         [String]$SimpleSearch,
 
+        [Parameter(ParameterSetName = 'Base', Mandatory = $true)]
+        [switch]$Base,
+
         # Explicit UDF flag for SimpleSearch
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $false)]
         [switch]$Udf,
@@ -58,6 +62,7 @@ function Get-AutotaskAPIResource {
         [switch]$ResolveLabels,
 
         # Convert output from UTC to local user time & date values
+        [Parameter()]
         [switch]$LocalTime
     )
 
@@ -75,8 +80,26 @@ function Get-AutotaskAPIResource {
         $headers  = $Script:AutotaskAuthHeader
 
         $Script:Index = $Script:Queries | Group-Object Index -AsHashTable -AsString
-        $ResourceURL  = @(($Script:Index[$resource] | Where-Object { $_.Get -eq $resource }))[0]
+        # First, get the group for this resource (by Index / tag)
+        $resourceGroup = $Script:Index[$resource]
 
+        if (-not $resourceGroup) {
+            $resourceGroup = $Script:Queries | Where-Object { $_.Get -eq $resource }
+        } 
+
+        if (-not $resourceGroup) {
+            throw "Resource '$resource' not found in the index."
+        }
+
+        # Try match where .Get == resource
+        $ResourceURL = @($resourceGroup | Where-Object { $_.Get -eq $resource })[0]
+
+        # If that fails, fall back to the first entry for this index
+        if (-not $ResourceURL) {
+            $ResourceURL = @($resourceGroup)[0]
+        }
+
+        $Script:BasePath = $ResourceURL.name
         $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
         # Fix path to InvoicePDF URL, must be unique vs. /Invoices in Swagger file
         $ResourceURL.name = $ResourceURL.name.replace("V1.0/InvoicePDF", "V1.0/Invoices/{id}/InvoicePDF")
@@ -171,6 +194,20 @@ function Get-AutotaskAPIResource {
             break
         }
 
+        $path = $ResourceURL.name
+
+        if ($Base) {
+            $path = $Script:BasePath
+            if (-not $path) {
+            $path = $ResourceURL.name
+        }
+
+        # Strip /query and any placeholders just in case
+        $path = $path -replace '/query$', ''
+        $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
+    }
+    else {
+
         if ($ID) {
             $ResourceURL = ("$($ResourceURL.name)" -replace '{parentid}', "$($ID)")
         }
@@ -204,8 +241,12 @@ function Get-AutotaskAPIResource {
         if ($resource -eq "InvoicePDF" -and $ID) {
             $ResourceURL = ("$($ResourceURL)" -replace '{id}', "$($ID)")
         }
+    }
 
-        $SetURI = "$($Script:AutotaskBaseURI)$($ResourceURL)"
+        if (-not $Base) {
+            $path = $ResourceURL
+        }
+        $SetURI = "$($Script:AutotaskBaseURI)$path"
 
         try {
             do {
