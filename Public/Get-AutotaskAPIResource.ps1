@@ -101,8 +101,6 @@ function Get-AutotaskAPIResource {
 
         $Script:BasePath = $ResourceURL.name
         $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
-        # Fix path to InvoicePDF URL, must be unique vs. /Invoices in Swagger file
-        $ResourceURL.name = $ResourceURL.name.replace("V1.0/InvoicePDF", "V1.0/Invoices/{id}/InvoicePDF")
 
         # Picklist metadata lookup
         $picklistFields = @()
@@ -123,13 +121,19 @@ function Get-AutotaskAPIResource {
 
         # UDF metadata lookup
         $udfNames = @()
-        try {
-            $udfNames = Get-AutotaskUdfNames -Resource $resource
-            Write-Verbose "User defined fields for $resource include: $($udfNames -join ', ')"
+        
+        if (-not $Base) {
+            try {
+                $udfNames = Get-AutotaskUdfNames -Resource $resource
+                Write-Verbose "User defined fields for $resource include: $($udfNames -join ', ')"
+            }
+            catch {
+                Write-Verbose "Could not build UDF index for '$resource': $_"
+                $udfNames = @()
+            }
         }
-        catch {
-            Write-Verbose "Could not build UDF index for '$resource': $_"
-            $udfNames = @()
+        else {
+            Write-Verbose "Skipping UDF metadata lookup for base resource '$resource'."
         }
 
         # SimpleSearch handling
@@ -237,10 +241,6 @@ function Get-AutotaskAPIResource {
                 }
             }
         }
-
-        if ($resource -eq "InvoicePDF" -and $ID) {
-            $ResourceURL = ("$($ResourceURL)" -replace '{id}', "$($ID)")
-        }
     }
 
         if (-not $Base) {
@@ -283,6 +283,11 @@ function Get-AutotaskAPIResource {
                 }
 
                 $SetURI = $items.PageDetails.NextPageUrl
+
+                if ($Base) {
+                    $items
+                    break
+                }
 
                 if ($resource -eq "InvoicePDF") {
                     return $items
