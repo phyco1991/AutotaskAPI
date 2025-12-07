@@ -31,11 +31,39 @@ function Add-AutotaskAPIAuth (
     try {
         $Version = (Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation").apiversions | select-object -last 1
         $AutotaskBaseURI = Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/$($Version)/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
-        write-host "Setting AutotaskBaseURI to $($AutotaskBaseURI.url) using version $Version" -ForegroundColor green
-        Add-AutotaskBaseURI -BaseURI $AutotaskBaseURI.url
+        $BaseURI = $AutotaskBaseURI.url
+        write-host "Setting AutotaskBaseURI to $BaseURI using version $Version" -ForegroundColor green
+        Add-AutotaskBaseURI -BaseURI $BaseURI
     }
     catch {
         write-host "Could not Retrieve baseuri. E-mail address might be incorrect. You can manually add the baseuri via the Add-AutotaskBaseURI cmdlet. $($_.Exception.Message)" -ForegroundColor red
+    }
+
+    $testUri = "$BaseURI$Version/Version"
+    Write-Host "Validating Autotask API authentication against $testUri"
+
+    try {
+        $null = Invoke-RestMethod -Uri $testUri -Headers $Script:AutotaskAuthHeader -Method Get -TimeoutSec 20
+        Write-Host "Autotask API authentication validated successfully."
+    }
+    catch {
+        $ex   = $_.Exception
+        $resp = $ex.Response
+
+        if ($resp -is [System.Net.HttpWebResponse]) {
+            $status = [int]$resp.StatusCode
+            $desc   = $resp.StatusDescription
+
+            if ($status -eq 401) {
+                throw "Autotask API authentication failed (HTTP 401 $desc) when validating against $testUri. Check UserName, ApiIntegrationCode and Secret."
+            }
+            else {
+                throw "Autotask API validation call to $testUri failed with HTTP $status $desc. $($ex.Message)"
+            }
+        }
+        else {
+            throw "Autotask API validation call to $testUri failed: $($ex.Message)"
+        }
     }
 
 }

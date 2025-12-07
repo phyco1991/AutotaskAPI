@@ -386,18 +386,90 @@ function Get-AutotaskAPIResource {
             } while ($null -ne $SetURI)
         }
         catch {
-            if ($psversiontable.psversion.major -lt 6) {
-                $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
-                $streamReader.BaseStream.Position = 0
-                if ($streamReader.ReadToEnd() -like '*{*') { $ErrResp = $streamReader.ReadToEnd() | ConvertFrom-Json }
-                $streamReader.Close()
-            }
-            if ($ErrResp.errors) {
-                Write-Error "API Error: $($ErrResp.errors)"
-            }
-            else {
-                Write-Error "Connecting to the Autotask API failed. $($_.Exception.Message)"
-            }
+            $ErrResp    = $null
+            $bodyText   = $null
+            $statusCode = $null
+            $statusDesc = $null
+            $respUri    = $SetURI
+            $contentType = $null
+            
+            $ex   = $_.Exception
+            $resp = $ex.Response
+            
+            if ($resp -is [System.Net.HttpWebResponse]) {
+                $statusCode  = [int]$resp.StatusCode
+                $statusDesc  = $resp.StatusDescription
+                $respUri     = $resp.ResponseUri
+                $contentType = $resp.ContentType
+                
+                try {
+                    $stream = $resp.GetResponseStream()
+                    if ($stream) {
+                        $reader   = New-Object System.IO.StreamReader($stream)
+                        $bodyText = $reader.ReadToEnd()
+                        $reader.Close()
+                    }
+                }
+                catch {
+                    # ignore read failures, fall back to generic message
+                    }
+                    # Try parse JSON error body if present
+                    if ($bodyText -and $bodyText.Trim().StartsWith('{')) {
+                        try {
+                            $ErrResp = $bodyText | ConvertFrom-Json
+                        }
+                        catch {
+                            $ErrResp = $null
+                        }
+                    }
+                }
+
+    # 401 Error - Possible bad auth or incorrect permissions
+    if ($statusCode -eq 401) {
+        Write-Error ("Autotask API authentication/authorisation failed (HTTP 401 {0}) when calling '{1}'. " +
+                     "Check the credentials and base URI configured via Add-AutotaskAPIAuth.") -f $statusDesc, $respUri
+        return
+    }
+
+    # 404 Error with HTML response - Indicative of an outage
+    if ($statusCode -eq 404 -and $contentType -like '*/html*') {
+        $snippet = $null
+        if ($bodyText) {
+            $len     = [Math]::Min(300, $bodyText.Length)
+            $snippet = $bodyText.Substring(0, $len)
         }
+        Write-Error ("Autotask API returned HTTP 404 (HTML) for '{0}'. " +
+                     "This usually indicates the Autotask service or route is unavailable, or the BaseURI is incorrect. " +
+                     "HTML snippet:`n{1}") -f $respUri, $snippet
+        return
+    }
+
+    # JSON error payload with .errors
+    if ($ErrResp -and $ErrResp.errors) {
+        Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. API errors: {3}" -f `
+                     $respUri, $statusCode, $statusDesc, ($ErrResp.errors -join '; '))
+        return
+    }
+
+    # Fallback: show status, URL, and first few hundred chars of body if present
+    if ($statusCode) {
+        if ($bodyText) {
+            $len     = [Math]::Min(300, $bodyText.Length)
+            $snippet = $bodyText.Substring(0, $len)
+            Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. " +
+                         "Response body (first {3} chars):`n{4}") -f `
+                        $respUri, $statusCode, $statusDesc, $len, $snippet
+        }
+        else {
+            Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. {3}" -f `
+                         $respUri, $statusCode, $statusDesc, $ex.Message)
+        }
+    }
+    else {
+        # No HTTP response object received at all
+        Write-Error "Connecting to the Autotask API failed. $($ex.Message)"
+    }
+}
+
     }
 }
