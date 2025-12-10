@@ -431,8 +431,8 @@ function Get-AutotaskAPIResource {
         return
     }
 
-    # 404 Error with HTML response - Indicative of an outage
-    if ($statusCode -eq 404 -and $contentType -like '*/html*') {
+    # 404 Error or HTML response - Indicative of an outage (Kaseya use a custom 404 page for scheduled maintenance windows)
+    if ($statusCode -eq 404 -or $contentType -eq 'text/html') {
         $snippet = $null
         if ($bodyText) {
             $len     = [Math]::Min(300, $bodyText.Length)
