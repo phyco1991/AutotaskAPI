@@ -44,6 +44,7 @@ function Get-AutotaskAPIResource {
         [String]$SearchQuery,
 
         [Parameter(ParameterSetName = 'SearchQuery', Mandatory = $false)]
+        [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $false)]
         [ValidateSet("GET", "POST")]
         [String]$Method,
 
@@ -277,9 +278,12 @@ function Get-AutotaskAPIResource {
                 }
 
                 switch ($Method) {
-                    GET    { $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get }
-                    POST   { $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Post -Body $Body }
-                    Default{ $items = Invoke-RestMethod -Uri $SetURI -Headers $Headers -Method Get }
+                    GET    { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get
+                            $items = $response.Content | ConvertFrom-Json }
+                    POST   { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body
+                            $items = $response.Content | ConvertFrom-Json }
+                    Default{ $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get
+                            $items = $response.Content | ConvertFrom-Json }
                 }
 
                 $SetURI = $items.PageDetails.NextPageUrl
