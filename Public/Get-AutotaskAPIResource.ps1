@@ -278,11 +278,11 @@ function Get-AutotaskAPIResource {
                 }
 
                 switch ($Method) {
-                    GET    { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get
+                    GET    { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
                             $items = $response.Content | ConvertFrom-Json }
-                    POST   { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body
+                    POST   { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body -UseBasicParsing
                             $items = $response.Content | ConvertFrom-Json }
-                    Default{ $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get
+                    Default{ $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
                             $items = $response.Content | ConvertFrom-Json }
                 }
 
