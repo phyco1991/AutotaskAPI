@@ -62,6 +62,10 @@ function Get-AutotaskAPIResource {
         [Parameter()]
         [switch]$ResolveLabels,
 
+        # Generate a URL to open selected entities in the Autotask GUI
+        [Parameter(Mandatory = $false)]
+        [switch]$URL,
+
         # Convert output from UTC to local user time & date values
         [Parameter()]
         [switch]$LocalTime
@@ -339,7 +343,11 @@ function Get-AutotaskAPIResource {
                                         }
                             }
                         }
-                        $item
+                        if ($URL) {
+                            $item | Get-AutotaskEntityURL -Entity $resource
+                        } else {
+                            $item
+                        }
                     }
                 }
 
@@ -383,10 +391,13 @@ function Get-AutotaskAPIResource {
                                     }
                             }
                         }
-                        $item
+                        if ($URL) {
+                            $item | Get-AutotaskEntityURL -Entity $resource
+                        } else {
+                            $item
+                        }
                     }
                 }
-
             } while ($null -ne $SetURI)
         }
         catch {
