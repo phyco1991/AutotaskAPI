@@ -53,7 +53,7 @@ function Get-AutotaskAPIResourceList {
     # Otherwise (or if -SwaggerUrl supplied), read Swagger JSON directly from supplied URL
     if ($SwaggerUrl -and (-not $fromQueries -or $PSBoundParameters.ContainsKey('SwaggerUrl'))) {
         try {
-            $spec = Invoke-RestMethod -Method GET -Uri $SwaggerUrl -Headers $headers
+            $spec = Invoke-WebRequest -Method GET -Uri $SwaggerUrl -Headers $headers -UseBasicParsing
             $names = $spec.paths.PSObject.Properties.Name |
                      ForEach-Object { ($_ -split '/')[1] } |
                      Where-Object { $_ -and ($_ -notmatch '^{') } |

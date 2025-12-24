@@ -29,8 +29,8 @@ function Add-AutotaskAPIAuth (
     }
     write-host "Retrieving webservices URI based on username" -ForegroundColor Green
     try {
-        $Version = (Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation").apiversions | select-object -last 1
-        $AutotaskBaseURI = Invoke-RestMethod -Uri "https://webservices2.autotask.net/atservicesrest/$($Version)/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
+        $Version = (Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation").apiversions | select-object -last 1
+        $AutotaskBaseURI = Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/$($Version)/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
         $BaseURI = $AutotaskBaseURI.url
         write-host "Setting AutotaskBaseURI to $BaseURI using version $Version" -ForegroundColor green
         Add-AutotaskBaseURI -BaseURI $BaseURI
@@ -43,7 +43,7 @@ function Add-AutotaskAPIAuth (
     Write-Host "Validating Autotask API authentication against $testUri"
 
     try {
-        $null = Invoke-RestMethod -Uri $testUri -Headers $Script:AutotaskAuthHeader -Method Get -TimeoutSec 20
+        $null = Invoke-WebRequest -UseBasicParsing -Uri $testUri -Headers $Script:AutotaskAuthHeader -Method Get -TimeoutSec 20
         Write-Host "Autotask API authentication validated successfully."
     }
     catch {

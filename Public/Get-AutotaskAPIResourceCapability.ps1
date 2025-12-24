@@ -28,5 +28,5 @@ function Get-AutotaskAPIResourceCapability {
     }
 
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation"
-    (Invoke-RestMethod -Method GET -Uri $uri -Headers $Script:AutotaskAuthHeader).info
+    (Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader).info
 }

@@ -57,7 +57,7 @@ function Get-AutotaskEntityURL {
         # Map entities to ExecuteCommand patterns
         $script:AT_ExecuteCommandMap = @{
             Tickets            = @{ Code = 'OpenTicketDetail';     Param = 'TicketID' }
-            ConfigurationItems = @{ Code = 'EditInstalledProduct'; Param = 'InstalledProductID' }
+            ConfigurationItems = @{ Code = 'OpenInstalledProduct'; Param = 'InstalledProductID' }
             Contacts           = @{ Code = 'OpenContact';          Param = 'ContactID' }
             Companies          = @{ Code = 'OpenAccount';          Param = 'AccountID' }          # Company = Account in Autotask
             Contracts          = @{ Code = 'OpenContract';         Param = 'ContractID' }
