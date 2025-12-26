@@ -52,9 +52,11 @@ function New-AutotaskBody {
                 Write-Host "Headers  :" ($Headers | ConvertTo-Json -Compress)
                 Write-Host "=========================" -ForegroundColor DarkGray
             }
-            $ObjectTemplate = (Invoke-RestMethod -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/fields" -headers $Headers -Method Get).fields
+            $resp = Invoke-WebRequest -UseBasicParsing -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/fields" -headers $Headers -Method Get
+            $ObjectTemplate = ($resp.content | ConvertFrom-Json).fields
             try {
-                $UDFs = (Invoke-RestMethod -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/userdefinedfields" -headers $Headers -Method Get).fields | select-object name, value
+                $resp2 = Invoke-WebRequest -UseBasicParsing -Uri "$($Script:AutotaskBaseURI)/$($resourceURL)/entityInformation/userdefinedfields" -headers $Headers -Method Get
+                $UDFs = ($resp2.content | ConvertFrom-Json).fields | select-object name, value
             } catch {
                 if ( $_.Exception.Response.StatusCode -ne "NotFound" ) {
                     throw

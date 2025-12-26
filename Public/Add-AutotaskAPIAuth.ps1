@@ -19,8 +19,15 @@ function Add-AutotaskAPIAuth (
     [Parameter(Mandatory = $true)][PSCredential]$credentials
 ) {
     #We convert the securestring...back to a normal string :'( Why basic auth AT? why?!
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($credentials.Password)
+    try {
+    $BSTR   = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($credentials.Password)
     $Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($BSTR)
+}
+finally {
+    if ($BSTR -ne [IntPtr]::Zero) {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+    }
+}
     $Script:AutotaskAuthHeader = @{
         'ApiIntegrationcode' = $ApiIntegrationcode
         'UserName'           = $credentials.UserName
@@ -29,9 +36,13 @@ function Add-AutotaskAPIAuth (
     }
     write-host "Retrieving webservices URI based on username" -ForegroundColor Green
     try {
-        $Version = (Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation").apiversions | select-object -last 1
-        $AutotaskBaseURI = Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/$($Version)/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
-        $BaseURI = $AutotaskBaseURI.url
+        $VersionInfoResponse = Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/versioninformation"
+        $VersionInfo         = $VersionInfoResponse.Content | ConvertFrom-Json
+        $Version             = $VersionInfo.apiVersions | Select-Object -Last 1
+        
+        $ZoneInfoResponse = Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/$Version/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
+        $ZoneInfo         = $ZoneInfoResponse.Content | ConvertFrom-Json
+        $BaseURI = $ZoneInfo.url
         write-host "Setting AutotaskBaseURI to $BaseURI using version $Version" -ForegroundColor green
         Add-AutotaskBaseURI -BaseURI $BaseURI
     }
@@ -39,7 +50,7 @@ function Add-AutotaskAPIAuth (
         write-host "Could not Retrieve baseuri. E-mail address might be incorrect. You can manually add the baseuri via the Add-AutotaskBaseURI cmdlet. $($_.Exception.Message)" -ForegroundColor red
     }
 
-    $testUri = "$BaseURI$Version/Version"
+    $testUri = ($BaseURI.TrimEnd('/')) + '/' + ($Version.Trim('/')) + '/Version'
     Write-Host "Validating Autotask API authentication against $testUri"
 
     try {

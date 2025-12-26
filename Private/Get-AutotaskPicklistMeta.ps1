@@ -36,8 +36,8 @@ function Get-AutotaskPicklistMeta {
     $fieldsUri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation/fields"
     Write-Verbose "Querying field metadata for '$Entity' from: $fieldsUri"
 
-    $fieldInfo = Invoke-RestMethod -Method Get -Uri $fieldsUri -Headers $Script:AutotaskAuthHeader
-    $fields    = $fieldInfo.fields
+    $fieldInfo = Invoke-WebRequest -Method Get -UseBasicParsing -Uri $fieldsUri -Headers $Script:AutotaskAuthHeader
+    $fields    = ($fieldInfo.content | ConvertFrom-Json).fields
 
     # Picklist fields only
     $picklistFields = $fields | Where-Object { $_.isPickList -eq $true }

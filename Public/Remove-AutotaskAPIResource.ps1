@@ -46,7 +46,7 @@ function Remove-AutotaskAPIResource {
         $SetURI = "$($Script:AutotaskBaseURI)/$($resourceURL)"
         try {
             if ($confirm -eq $true) {
-                Invoke-RestMethod -Uri "$SetURI" -headers $Headers -Method Delete
+                Invoke-WebRequest -UseBasicParsing -Uri "$SetURI" -headers $Headers -Method Delete
             }
             else {
                 write-host "You must set confirm to `$True to execute a deletion."

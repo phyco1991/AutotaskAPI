@@ -23,7 +23,10 @@ function New-ResourceDynamicParameter
     $AttributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
     $ParameterAttribute = New-Object System.Management.Automation.ParameterAttribute
     $ParameterAttribute.Mandatory = $true
+    $ParameterAttribute.Position = 0
     $AttributeCollection.Add($ParameterAttribute)
+    $AliasAttribute = New-Object System.Management.Automation.AliasAttribute(@('Entity'))
+    $AttributeCollection.Add($AliasAttribute)
     if (!$Script:Swagger) { $Script:Swagger = get-content "$($MyInvocation.MyCommand.Module.ModuleBase)\v1.json" -raw | ConvertFrom-Json }
         $Script:Queries = foreach ($Path in $Script:Swagger.paths.psobject.Properties) {
         [PSCustomObject]@{

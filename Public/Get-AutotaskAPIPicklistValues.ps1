@@ -28,7 +28,7 @@ function Get-AutotaskAPIPicklistValues {
     }
 
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation/fields"
-    $fields = (Invoke-RestMethod -Method GET -Uri $uri -Headers $Script:AutotaskAuthHeader).fields
+    $fields = (Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader).fields
     $f = $fields | Where-Object { $_.name -eq $FieldName }
     if (-not $f) { throw "Field '$FieldName' not found on '$Entity'." }
     if (-not $f.isPickList) { throw "'$Entity.$FieldName' is not a picklist field." }

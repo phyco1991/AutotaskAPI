@@ -36,8 +36,8 @@ function Get-AutotaskUdfNames {
     Write-Verbose "Querying UDF metadata for '$Resource' from: $uri"
 
     try {
-        $udfInfo = Invoke-RestMethod -Method Get -Uri $uri -Headers $Script:AutotaskAuthHeader
-        $udfs = $udfInfo.fields
+        $udfInfo = Invoke-WebRequest -Method Get -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader
+        $udfs = ($udfInfo.content | ConvertFrom-Json).fields
 
         $names = @()
         foreach ($u in $udfs) {

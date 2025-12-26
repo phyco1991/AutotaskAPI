@@ -28,5 +28,11 @@ function Get-AutotaskAPIResourceCapability {
     }
 
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation"
-    (Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader).info
+    $resp = Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader
+    try {
+        ($resp.Content | ConvertFrom-Json).info
+    }
+    catch {
+        throw "Autotask returned a non-JSON response for $uri (HTTP $($resp.StatusCode)). First 200 chars: $($resp.Content.Substring(0, [Math]::Min(200, $resp.Content.Length)))"
+    }
 }

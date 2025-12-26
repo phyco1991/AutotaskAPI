@@ -10,3 +10,5 @@ foreach ($import in @($Public))
         Write-Error -Message "Failed to import function $($import.FullName): $_"
     }
 }
+Set-Alias get-at Get-AutotaskAPIResource
+Export-ModuleMember -Alias get-at

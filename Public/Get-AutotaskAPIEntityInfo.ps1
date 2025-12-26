@@ -34,7 +34,15 @@ function Get-AutotaskAPIEntityInfo {
     }
 
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation/fields"
-    $fields = (Invoke-RestMethod -Method GET -Uri $uri -Headers $Script:AutotaskAuthHeader).fields
+    $resp = Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader
+        try {
+        $fields = ($resp.Content | ConvertFrom-Json).fields
+    }
+    catch {
+        $preview = $resp.Content
+        if ($preview) { $preview = $preview.Substring(0, [Math]::Min(200, $preview.Length)) }
+        throw "Expected JSON from $uri but got non-JSON response (HTTP $($resp.StatusCode)). First 200 chars: $preview"
+    }
 
     if (-not $AllFields) {
         $fields = $fields | Where-Object { $_.isQueryable -eq $true }
