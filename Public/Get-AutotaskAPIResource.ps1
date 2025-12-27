@@ -93,7 +93,7 @@ function Get-AutotaskAPIResource {
         } 
 
         if (-not $resourceGroup) {
-            throw "Resource '$resource' not found in the index."
+            throw "WARNING: Resource '$resource' not found in the index."
         }
 
         # Try match where .Get == resource
@@ -112,7 +112,7 @@ function Get-AutotaskAPIResource {
         $picklistMap    = @{}
         if ($ResolveLabels.IsPresent) {
                 try {
-                        $pickMeta       = Get-AutotaskPicklistMeta -Entity $resource
+                        $pickMeta       = Get-AutotaskPicklistMeta -Resource $resource
                         $picklistFields = $pickMeta.PicklistFields
                         $picklistMap    = $pickMeta.PicklistMap
                         Write-Verbose "Picklist fields for $resource include: $($picklistFields -join ', ')"
@@ -130,10 +130,10 @@ function Get-AutotaskAPIResource {
         if (-not $Base) {
             try {
                 $udfNames = Get-AutotaskUdfNames -Resource $resource
-                Write-Verbose "User defined fields for $resource include: $($udfNames -join ', ')"
+                Write-Verbose "User Defined Fields for $resource include: $($udfNames -join ', ')"
             }
             catch {
-                Write-Verbose "Could not build UDF index for '$resource': $_"
+                Write-Warning "WARNING: Could not build UDF index for '$resource': $_"
                 $udfNames = @()
             }
         }
@@ -258,8 +258,8 @@ function Get-AutotaskAPIResource {
                 if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('Verbose') -or $VerbosePreference -eq 'Continue') {
                     $safeHeaders = @{}
                     foreach ($key in $Headers.Keys) {
-                        if ($key -eq 'Secret') {
-                            # Mask the secret value from Verbose output
+                        if (($key -eq 'Secret') -or ($key -eq'APIIntegrationcode')) {
+                            # Masks the secret and integration code values from being displayed as plain text in Verbose output
                             $val = $Headers[$key]
                             if ($val -and $val.Length -gt 4) {
                                 $safeHeaders[$key] = ($val.Substring(0,2) + '*REDACTED*' + $val.Substring($val.Length-2,2))

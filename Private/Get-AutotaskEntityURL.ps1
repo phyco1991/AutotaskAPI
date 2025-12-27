@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Used to resolve URL and add to the output for selected Autotask entities
+    Helper function used by Get-AutotaskAPIResource to resolve URLs and add to the body output for compatible Autotask entity queries
 .DESCRIPTION
-    TBA
+    Adds a URL to the GUI of your Autotask instance to the body output of any queries through specifying the '-URL' parameter on the Get-AutotaskAPIResource function.
 .EXAMPLE
-    PS C:\> Get-AutotaskPicklistMeta -Entity Tickets
-    Provides a URL for the matching ticket
+    PS C:\> Get-AutotaskAPIResource -Resource Tickets -ID 12345678 -URL
+    Provides a URL for the matching ticket in the form of 'https://ww*.autotask.net/Autotask/AutotaskExtend/ExecuteCommand.aspx?Code=OpenTicketDetail&TicketID=12345678'
 .INPUTS
-    -Entity
+    none
 .OUTPUTS
     none
 .NOTES
@@ -46,7 +46,7 @@ function Get-AutotaskEntityURL {
 
     begin {
         if (-not $Script:AutotaskBaseURI) {
-            throw "Autotask base URI not set. Run Add-AutotaskAPIAuth first."
+            throw "ERROR: Autotask base URI not set. Run Add-AutotaskAPIAuth first."
         }
 
         # Convert API base host to GUI host
@@ -68,7 +68,7 @@ function Get-AutotaskEntityURL {
         }
 
         $map = $script:AT_ExecuteCommandMap[$Entity]
-        if (-not $map) { throw "No ExecuteCommand mapping defined for entity '$Entity'." }
+        if (-not $map) { throw "ERROR: No ExecuteCommand mapping defined for resource '$Entity'. You cannot use the -URL parameter here." }
     }
 
     process {

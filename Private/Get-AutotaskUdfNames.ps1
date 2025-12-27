@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Used to gather an index of UDF Names associated with a specific entity
+    Helper function used by Get-AutotaskAPIResource to gather an index of UDF Names associated with a specific entity
 .DESCRIPTION
     When fields are queried using Get-AutotaskAPIResource and they are a UDF, this allows the function to automatically adjust the API call to resolve them (without needing to specify udf=true in your filter)
 .EXAMPLE
@@ -23,21 +23,21 @@ function Get-AutotaskUdfNames {
     )
 
     if ($Script:AutotaskUdfIndex.ContainsKey($Resource)) {
-        Write-Verbose "UDF cache hit for resource '$Resource'."
+        Write-Information "INFO: Cached UDF index hit for resource '$Resource'."
         return $Script:AutotaskUdfIndex[$Resource]
     }
 
     if (-not $Script:AutotaskAuthHeader -or -not $Script:AutotaskBaseURI) {
-        throw "Autotask API auth is not initialised. Run Add-AutotaskAPIAuth first."
+        throw "ERROR: Autotask API auth is not initialised. Run Add-AutotaskAPIAuth first."
     }
 
-    # Build the URL exactly as per the docs
+    # Build the URL
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Resource/entityInformation/userDefinedFields"
-    Write-Verbose "Querying UDF metadata for '$Resource' from: $uri"
+    Write-Information "INFO: Building initial UDF index for '$Resource' from: $uri..."
 
     try {
         $udfInfo = Invoke-WebRequest -Method Get -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader
-        $udfs = ($udfInfo.content | ConvertFrom-Json).fields
+        $udfs = ($udfInfo.Content | ConvertFrom-Json).fields
 
         $names = @()
         foreach ($u in $udfs) {
@@ -45,13 +45,13 @@ function Get-AutotaskUdfNames {
             elseif ($u.name) { $names += $u.name }
         }
 
-        Write-Verbose "Found $($names.Count) UDF field names for '$Resource'."
+        Write-Information "INFO: Wrote $($names.Count) UDF field names to local index for '$Resource'."
 
         $Script:AutotaskUdfIndex[$Resource] = $names
         return $names
     }
     catch {
-        Write-Verbose "Failed to query UDF metadata for resource '$Resource' from $uri : $_"
+        Write-Warning "WARNING: Failed to properly build local UDF index for resource '$Resource' from $uri : $_"
         return @()
     }
 }

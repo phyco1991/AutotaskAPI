@@ -1,3 +1,5 @@
+$script:WarningPreference     = 'Continue'
+$script:InformationPreference = 'Continue'
 $Public  = @(Get-ChildItem -Path $PSScriptRoot\Public\*.ps1 -ErrorAction SilentlyContinue) + @(Get-ChildItem -Path $PSScriptRoot\Private\*.ps1 -ErrorAction SilentlyContinue)
 foreach ($import in @($Public))
 {

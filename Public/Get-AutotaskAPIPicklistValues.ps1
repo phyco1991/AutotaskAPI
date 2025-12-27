@@ -20,23 +20,28 @@ function Get-AutotaskAPIPicklistValues {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string] $Entity,
-        [Parameter(Mandatory)][string] $FieldName
+        [Parameter(Mandatory)][string] $FieldName,
+        [Parameter()][object[]] $Fields   # optional: pre-fetched entityInformation/fields
     )
 
     if (-not $Script:AutotaskBaseURI -or -not $Script:AutotaskAuthHeader) {
-        throw "You must run Add-AutotaskAPIAuth first."
+        throw "WARNING: You must run Add-AutotaskAPIAuth first."
     }
 
+    if (-not $Fields) {
     $uri = "$($Script:AutotaskBaseURI)/V1.0/$Entity/entityInformation/fields"
-    $fields = (Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader).fields
+    $resp = Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader
+    $fields = ($resp | ConvertFrom-Json).fields
+    }
     $f = $fields | Where-Object { $_.name -eq $FieldName }
-    if (-not $f) { throw "Field '$FieldName' not found on '$Entity'." }
-    if (-not $f.isPickList) { throw "'$Entity.$FieldName' is not a picklist field." }
+    if (-not $f) { throw "WARNING: Field '$FieldName' not found on '$Entity'." }
+    if (-not $f.isPickList) { throw "WARNING: '$Entity.$FieldName' is not a picklist field." }
 
     if ($f.picklistValues) {
         $f.picklistValues |
             Select-Object value, label, isActive, isDefaultValue, sortOrder, parentValue
     } else {
         Write-Warning "No inline picklistValues. Some entities document a dedicated picklist endpoint."
+        @()
     }
 }
