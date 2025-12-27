@@ -41,7 +41,7 @@ function Get-AutotaskAPIPicklistValues {
         $f.picklistValues |
             Select-Object value, label, isActive, isDefaultValue, sortOrder, parentValue
     } else {
-        Write-Warning "No inline picklistValues. Some entities document a dedicated picklist endpoint."
+        Write-Warning "No inline picklistValues were found for $($f.name). Some entities document a dedicated picklist endpoint."
         @()
     }
 }
