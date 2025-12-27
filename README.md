@@ -58,7 +58,7 @@ With this Module, you can either use native JSON filters that are sent to the AP
 - all companies that are active and type customer
 - all companies that are ((active and with (type customer or partner) and have UDF 'cool company' set to 'YES') or are located in countryId 42 and managed by Jim)
 
-If you don't need more than one filter set, you can use *-SimpleSearch* instead. Simple search will build a single JSON statement for you. Simple filters doesn't support  multiple statements and is therefor limited to one single filter (e.g. all companies with "isactive = true").
+If you don't need more than one filter set, you can use *-SimpleSearch* instead. Simple search will build a single JSON statement for you. Simple filters doesn't support multiple statements and is therefore limited to one single filter (e.g. all companies with "isactive = true").
 
 You can find examples for filters below. In addition the [Autotask documentation about Basic Queries](https://www.autotask.net/help/developerhelp/Content/APIs/REST/API_Calls/REST_Basic_Query_Calls.htm) contains a documentation of all keywords and further examples that might help. You can also call a list of available fields via the Get-AutotaskAPIEntityInfo function.
 
@@ -71,6 +71,7 @@ Add-AutotaskAPIAuth # Adds the API/Application key and credentials (required to 
 Add-AutotaskBaseURI # Sets the Base URI if it is not auto-detected from the above
 Get-AutotaskAPIEntityInfo # Gets a list of available entities from a specific resource in the API
 Get-AutotaskAPIPicklistValues # Gets a list of available values for a specified picklist field from a specific resource in the API
+Get-AutotaskAPIRecurringServiceUnits.ps1 # BETA - For Recurring Service Contracts, this outputs a list of services with their quantity and last modified dates for each contract in scope
 Get-AutotaskAPIResource # Gets a specified resource in the API
 Get-AutotaskAPIResourceCapability # Gets a list of capabilities for a specific resource in the API
 Get-AutotaskAPIResourceList # Gets a list of available resources in the API
@@ -111,7 +112,7 @@ Get-AutotaskAPIResource -Resource Companies -SimpleSearch "companyname beginswit
 To get all child alerts for company 1234
 
 ```powershell
-Get-AutotaskAPIResource -Resource CompanyAlertsChild -ID 1234 -verbose
+Get-AutotaskAPIResource -Resource CompanyAlertsChild -ID 1234
 ```
 
 To get only child 7 in company id 1234
@@ -133,6 +134,13 @@ To get all configuration items with a specific UDF value:
 ```powershell
 Get-AutotaskAPIResource -Resource ConfigurationItems -SimpleSearch '"UDF Name" eq "UDF Value"'
 ```
+
+#### Modifiers
+
+To return results containing date/time values in local machine time zone (default is API time zone) add -LocalTime to your query  
+To return a URL to open the item(s) queried in Autotask as part of the response body, add -URL to your query (uses the ExecuteCommand API, only certain entities/resources are supported)
+To resolve Inline Picklist IDs to their label name, add -ResolveLabels to your query (initial execution time will be greater as the script builds a local index containing the additional data from Autotask)
+To view verbose log output from queries, add -Verbose to your query
 
 ### Combine Data with other Modules
 
@@ -205,6 +213,8 @@ Or a one-liner to change all companies webaddresses to "google.com"
 ```powershell
 Get-AutotaskAPIResource -Resource Companies -SimpleSearch 'Isactive eq true' | ForEach-Object {$_.Webaddress = "www.google.com"; $_} | Set-AutotaskAPIResource -Resource Companies
 ```
+
+For any changes made via PATCH, the script should output the ID of the changed objects as they are completed.
 
 ### DELETE/Remove data from API
 
