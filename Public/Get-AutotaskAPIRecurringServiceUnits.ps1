@@ -40,10 +40,10 @@ function Get-AutotaskAPIRecurringServiceUnits {
         # If set, PeriodType (and other picklists on Services) will be resolved as labels instead of raw numeric values
         [switch]$PeriodTypeAsLabel,
 
-        # Detail: one row per ContractServiceUnits entry (default)
-        # Summary: grouped by Company + ServiceName (+ PeriodType), Units summed
+        # Detail: Outputs all ContractServiceUnits entries returned on the query
+        # Summary: Outputs CompanyName, ContractName, ServiceName, ServiceMPN, ServiceQuantity, PeriodType, EffectiveDate for the 'most current' ContractServiceUnits entries returned on the query
         [ValidateSet('Detail', 'Summary')]
-        [string]$Mode = 'Detail'
+        [string]$Mode = 'Summary'
     )
 
     if (-not $Script:AutotaskBaseURI -or -not $Script:AutotaskAuthHeader) {
@@ -252,7 +252,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
             ServiceMPN     = $svc.manufacturerServiceProviderProductNumber
             PeriodType     = $svc.periodType   # numeric or label depending on -PeriodTypeAsLabel switch
             Units          = $u.units
-            EffectiveDate  = $u.startDate
+            EffectiveDate  = [datetime]$u.startDate
         }
     }
 
@@ -269,12 +269,15 @@ function Get-AutotaskAPIRecurringServiceUnits {
 
     # Summary mode
 
-    $grouped = $detailRows | Group-Object CompanyId, CompanyName, ContractId, ContractName, ServiceId, ServiceName, ServiceMPN, PeriodType, EffectiveDate
+    $grouped = $detailRows | Group-Object CompanyId, CompanyName, ContractId, ContractName, ServiceId, ServiceName, ServiceMPN, PeriodType
 
 $summaryRows = foreach ($g in $grouped) {
-    $any = $g.Group | Select-Object -First 1
-
-    $qty = ($g.Group | Measure-Object -Property Units -Sum).Sum
+    # Find newest EffectiveDate in this group
+    $latestDate = ($g.Group | Measure-Object -Property EffectiveDate -Maximum).Maximum
+    # Only rows at newest EffectiveDate contribute to quantity
+    $latestRows = $g.Group | Where-Object { $_.EffectiveDate -eq $latestDate }
+    $any = $latestRows | Select-Object -First 1
+    $qty = ($latestRows | Measure-Object -Property Units -Sum).Sum
 
     [PSCustomObject]@{
         CompanyName                    = $any.CompanyName
@@ -283,10 +286,9 @@ $summaryRows = foreach ($g in $grouped) {
         ServiceMPN                     = $any.ServiceMPN
         ServiceQuantity                = $qty
         PeriodType                     = $any.PeriodType
-        EffectiveDate                  = $any.EffectiveDate
+        EffectiveDate                  = $latestDate
     }
 }
 
-return $summaryRows | Sort-Object `
-    CompanyName, ContractName, ServiceName, ServiceMPN, PeriodType
+return $summaryRows | Sort-Object CompanyName, ContractName, ServiceName, ServiceMPN, PeriodType
 }
