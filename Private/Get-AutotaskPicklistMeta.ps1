@@ -65,11 +65,14 @@ function Get-AutotaskPicklistMeta {
         PicklistMap    = $picklistMap
     }
 
+    $mappedCount = ($picklistMap.GetEnumerator() | Where-Object { $_.Value.Count -gt 0 }).Count
+    Write-Information "INFO: Wrote $mappedCount Picklist Field names to local index for '$Resource'."
+
     $Script:AutotaskPicklistCache[$key] = $meta
     return $meta
     }
     catch {
-        Write-Warning "Failed to query Picklist metadata for resource '$Resource' from $fieldsUri : $($_.Exception.Message)"
+        Write-Warning "Failed to query Picklist Field metadata for resource '$Resource' from $fieldsUri : $($_.Exception.Message)"
         return @()
     }
 }

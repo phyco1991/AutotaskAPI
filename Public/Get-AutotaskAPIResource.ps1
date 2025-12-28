@@ -205,6 +205,9 @@ function Get-AutotaskAPIResource {
 
         $path = $ResourceURL.name
 
+        $Body = $null
+        $effectiveMethod = if ([string]::IsNullOrWhiteSpace($Method)) { 'GET' } else { $Method }
+
         if ($Base) {
             $path = $Script:BasePath
             if (-not $path) {
@@ -226,31 +229,31 @@ function Get-AutotaskAPIResource {
 
         if ($SearchQuery) {
             switch ($Method) {
-                GET {
-                    $ResourceURL = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
+                'GET' {
+                    $path = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
+                    $effectiveMethod = 'GET'
                 }
-                POST {
-                    $ResourceURL = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
-                    $body = $SearchQuery
+                'POST' {
+                    $path = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
+                    $Body = $SearchQuery
+                    $effectiveMethod = 'POST'
                 }
                 Default {
                     if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048) {
                         Write-Information "Using POST-Request as Request exceeded limit of 2100 characters. You can use -Method GET/POST to set a fixed Method."
-                        $ResourceURL = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
-                        $body   = $SearchQuery
-                        $Method = "POST"
+                        $path = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
+                        $Body = $SearchQuery
+                        $effectiveMethod = 'POST'
                     }
                     else {
-                        $ResourceURL = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
+                        $path = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
+                        $effectiveMethod = 'GET'
                     }
                 }
             }
         }
     }
 
-        if (-not $Base) {
-            $path = $ResourceURL
-        }
         $SetURI = "$($Script:AutotaskBaseURI)$path"
 
         try {
@@ -271,23 +274,31 @@ function Get-AutotaskAPIResource {
                             $safeHeaders[$key] = $Headers[$key]
                         }
                     }
-                    $effectiveMethod = if ([string]::IsNullOrWhiteSpace($Method)) { 'GET' } else { $Method }
                     Write-Host "=========================" -ForegroundColor DarkGray
                     Write-Host "AUTOTASK API REQUEST" -ForegroundColor Cyan
                     Write-Host "Method : $effectiveMethod"
                     Write-Host "URL    : $SetURI"
                     Write-Host "Headers:" ($safeHeaders | ConvertTo-Json -Compress)
-                    if ($Body) { Write-Host "Body   :" $Body }
+                    if ($Body) {
+                        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount([string]$Body)
+                        Write-Host "Body   : ($payloadBytes bytes) $Body"
+                    }
                     Write-Host "=========================" -ForegroundColor DarkGray
                 }
 
-                switch ($Method) {
-                    GET    { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
-                            $items = $response.Content | ConvertFrom-Json }
-                    POST   { $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body -UseBasicParsing
-                            $items = $response.Content | ConvertFrom-Json }
-                    Default{ $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
-                            $items = $response.Content | ConvertFrom-Json }
+                switch ($effectiveMethod) {
+                    'GET' {
+                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
+                        $items = $response.Content | ConvertFrom-Json
+                    }
+                    'POST' {
+                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body -ContentType 'application/json' -UseBasicParsing
+                        $items = $response.Content | ConvertFrom-Json
+                    }
+                    Default {
+                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
+                        $items = $response.Content | ConvertFrom-Json
+                    }
                 }
 
                 $SetURI = $items.PageDetails.NextPageUrl

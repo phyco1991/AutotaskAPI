@@ -48,7 +48,7 @@ function New-AutotaskAPIResource {
         $SendingBody = $body | ConvertTo-Json -Depth 10
         $body = [System.Text.Encoding]::UTF8.GetBytes($SendingBody)
         try {
-            Invoke-RestMethod -Uri "$($Script:AutotaskBaseURI)/$($resourceurl)"  -headers $Headers -Method post -Body $body
+            Invoke-WebRequest -Uri "$($Script:AutotaskBaseURI)/$($resourceurl)" -UseBasicParsing -Headers $Headers -Method POST -Body $body
         }
         catch {
             if ($psversiontable.psversion.major -lt 6) {

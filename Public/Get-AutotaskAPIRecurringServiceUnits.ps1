@@ -4,7 +4,7 @@
 .DESCRIPTION
     Queries the Contracts, ContractServices, and ContractServiceUnits entities to obtain all services against recurring service contracts including their quantity, period type, and other key information.
 .EXAMPLE
-    PS C:\> Get-AutotaskRecurringServiceUnits | Select-Object CompanyName, ContractName, ServiceName, ServiceCode, Units, PeriodType
+    PS C:\> Get-AutotaskRecurringServiceUnits | Select CompanyName,ContractName,ServiceName,ServiceCode,Units,PeriodType
     Provides a list of all services on active Recurring Services contracts, with quantity and period type.
 .INPUTS
     -CompanyId
@@ -37,7 +37,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         # Only return rows where the Contract row has changed since this time
         [datetime]$ChangedSince,
 
-        # If set, PeriodType (and other picklists on Services) will be labels instead of numeric values
+        # If set, PeriodType (and other picklists on Services) will be resolved as labels instead of raw numeric values
         [switch]$PeriodTypeAsLabel,
 
         # Detail: one row per ContractServiceUnits entry (default)
@@ -46,7 +46,11 @@ function Get-AutotaskAPIRecurringServiceUnits {
         [string]$Mode = 'Detail'
     )
 
-    Write-Verbose "Loading contracts..."
+    if (-not $Script:AutotaskBaseURI -or -not $Script:AutotaskAuthHeader) {
+        throw "You must run Add-AutotaskAPIAuth first."
+    }
+
+    Write-Information "Loading contracts..."
 
     # Get Contracts
 
@@ -112,15 +116,15 @@ function Get-AutotaskAPIRecurringServiceUnits {
 
     if (-not $contractFilter) {
         Write-Verbose "No contract filter supplied; getting all contracts (this is unlikely with current defaults)."
-        $contracts = Get-AutotaskAPIResource -Resource Contracts -LocalTime
+        $contracts = Get-AutotaskAPIResource -Resource Contracts -Base -LocalTime
     }
     else {
-        $contractQuery = @{ filter = $contractFilter } | ConvertTo-Json -Compress
+        $contractQuery = @{ filter = $contractFilter } | ConvertTo-Json -Compress -Depth 10
         $contracts     = Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery -LocalTime
     }
 
     if (-not $contracts) {
-        Write-Verbose "No contracts returned, exiting."
+        Write-Warning "No contracts returned, exiting."
         return
     }
 
@@ -131,35 +135,37 @@ function Get-AutotaskAPIRecurringServiceUnits {
     }
 
     $contractIds = $contracts.id | Sort-Object -Unique
-    Write-Verbose "Found $($contractIds.Count) contracts."
+    Write-Information "Found $($contractIds.Count) contracts."
 
     # Map companyID from contracts to companyName
 
-    Write-Verbose "Loading Companies for referenced contracts..."
+    Write-Information "Loading Companies for referenced contracts..."
     $companyIds = $contracts.companyID | Sort-Object -Unique
-    $companies  = @()
+    $companyQuery = @{
+        filter = @(@{ field='id'; op='in'; value=@($companyIds) })
+    } | ConvertTo-Json -Compress -Depth 10
     
-    foreach ($cid in $companyIds) {
-        $companies += Get-AutotaskAPIResource -Resource Companies -SimpleSearch "id eq $cid"
-    }
+    $companies = Get-AutotaskAPIResource -Resource Companies -SearchQuery $companyQuery
 
     $companyIndex = @{}
     foreach ($co in $companies) {
         $companyIndex[$co.id] = $co
     }
 
-    Write-Verbose "Found $($companies.Count) Companies."
+    Write-Information "Found $($companies.Count) Companies."
 
     # Get ContractServices for the contracts
 
-    Write-Verbose "Loading ContractServices..."
+    Write-Information "Loading ContractServices..."
 
     $allContractServices = @()
 
-    foreach ($cid in $contractIds) {
-        $allContractServices += Get-AutotaskAPIResource -Resource ContractServices `
-            -SimpleSearch "contractID eq $cid"
-    }
+    $contractIds = $contracts.id | Sort-Object -Unique
+    $csQuery = @{
+        filter = @(@{ field='contractID'; op='in'; value=@($contractIds) })
+    } | ConvertTo-Json -Compress -Depth 10
+    
+    $allContractServices = Get-AutotaskAPIResource -Resource ContractServices -SearchQuery $csQuery
 
     if (-not $allContractServices) {
         Write-Verbose "No ContractServices found, exiting."
@@ -171,43 +177,43 @@ function Get-AutotaskAPIRecurringServiceUnits {
         $csIndex[$cs.id] = $cs
     }
 
-    Write-Verbose "Found $($allContractServices.Count) ContractServices rows."
+    Write-Information "Found $($allContractServices.Count) ContractServices rows."
 
     # Get ContractServiceUnits for the ContractServices
 
-    Write-Verbose "Loading ContractServiceUnits..."
+    Write-Information "Loading ContractServiceUnits..."
 
     $allUnits = @()
     $csIds    = $allContractServices.id | Sort-Object -Unique
 
-    foreach ($csid in $csIds) {
-        $allUnits += Get-AutotaskAPIResource -Resource ContractServiceUnits `
-            -SimpleSearch "contractServiceID eq $csid"
-    }
+    $unitsQuery = @{
+        filter = @(@{ field='contractServiceID'; op='in'; value=@($csIds) })
+    } | ConvertTo-Json -Compress -Depth 10
+    
+    $allUnits = Get-AutotaskAPIResource -Resource ContractServiceUnits -SearchQuery $unitsQuery
 
     if (-not $allUnits) {
         Write-Verbose "No ContractServiceUnits matched the criteria, exiting."
         return
     }
 
-    Write-Verbose "Found $($allUnits.Count) ContractServiceUnits rows after filtering."
+    Write-Information "Found $($allUnits.Count) ContractServiceUnits rows after filtering."
 
     # Get Services for the Service IDs referenced
 
-    Write-Verbose "Loading Services..."
+    Write-Information "Loading Services..."
 
     $serviceIds = $allContractServices.serviceID | Sort-Object -Unique
     $services   = @()
 
-    foreach ($sid in $serviceIds) {
-        if ($PeriodTypeAsLabel) {
-            $services += Get-AutotaskAPIResource -Resource Services `
-                -SimpleSearch "id eq $sid" -ResolveLabels
-        }
-        else {
-            $services += Get-AutotaskAPIResource -Resource Services `
-                -SimpleSearch "id eq $sid"
-        }
+    $svcQuery = @{
+        filter = @(@{ field='id'; op='in'; value=$serviceIds })
+    } | ConvertTo-Json -Compress -Depth 10
+    
+    $services = if ($PeriodTypeAsLabel) {
+        Get-AutotaskAPIResource -Resource Services -SearchQuery $svcQuery -ResolveLabels
+    } else {
+        Get-AutotaskAPIResource -Resource Services -SearchQuery $svcQuery
     }
 
     $serviceIndex = @{}
@@ -215,7 +221,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         $serviceIndex[$svc.id] = $svc
     }
 
-    Write-Verbose "Found $($services.Count) Services rows."
+    Write-Information "Found $($services.Count) Services rows."
 
     # Build detail rows in memory
 
@@ -238,21 +244,15 @@ function Get-AutotaskAPIRecurringServiceUnits {
             CompanyName    = $company.companyName
             ContractId     = $contract.id
             ContractName   = $contract.contractName
-            ContractNumber = $contract.contractNumber
-
+            LastActivity   = $contract.lastModifiedDateTime
             ContractServiceId   = $cs.id
             ContractServiceName = $cs.serviceName
-
             ServiceId      = $svc.id
-            ServiceName    = $svc.description
-            ServiceCode    = $svc.manufacturerServiceProviderProductNumber
-
-            PeriodType     = $svc.periodType   # numeric or label depending on -PeriodTypeAsLabel
-            BillingCodeId  = $svc.billingCodeID
-
+            ServiceName    = $svc.name
+            ServiceMPN     = $svc.manufacturerServiceProviderProductNumber
+            PeriodType     = $svc.periodType   # numeric or label depending on -PeriodTypeAsLabel switch
             Units          = $u.units
-            EffectiveDate  = $u.effectiveDate
-            LastActivity   = $contract.lastModifiedDateTime
+            EffectiveDate  = $u.startDate
         }
     }
 
@@ -267,30 +267,26 @@ function Get-AutotaskAPIRecurringServiceUnits {
         return $detailRows
     }
 
-    # Summary mode: collapse to Company + ServiceName (+ PeriodType)
+    # Summary mode
 
-    $grouped = $detailRows |
-        Group-Object CompanyId, CompanyName, ServiceName, PeriodType
+    $grouped = $detailRows | Group-Object CompanyId, CompanyName, ContractId, ContractName, ServiceId, ServiceName, ServiceMPN, PeriodType, EffectiveDate
 
-    foreach ($g in $grouped) {
-        $any = $g.Group | Select-Object -First 1
+$summaryRows = foreach ($g in $grouped) {
+    $any = $g.Group | Select-Object -First 1
 
-        # Sum Units across all rows in this group
-        $totalUnits = ($g.Group | Measure-Object -Property Units -Sum).Sum
+    $qty = ($g.Group | Measure-Object -Property Units -Sum).Sum
 
-        # Latest LastActivity across contributing rows
-        $lastAct = ($g.Group | Measure-Object -Property LastActivity -Maximum).Maximum
-
-        [PSCustomObject]@{
-            CompanyId    = $any.CompanyId
-            CompanyName  = $any.CompanyName
-
-            ServiceCode  = $any.ServiceCode
-            ServiceName  = $any.ServiceName
-            PeriodType   = $any.PeriodType
-
-            TotalUnits   = $totalUnits
-            LastActivity = $lastAct
-        }
+    [PSCustomObject]@{
+        CompanyName                    = $any.CompanyName
+        ContractName                   = $any.ContractName
+        ServiceName                    = $any.ServiceName
+        ServiceMPN                     = $any.ServiceMPN
+        ServiceQuantity                = $qty
+        PeriodType                     = $any.PeriodType
+        EffectiveDate                  = $any.EffectiveDate
     }
+}
+
+return $summaryRows | Sort-Object `
+    CompanyName, ContractName, ServiceName, ServiceMPN, PeriodType
 }
