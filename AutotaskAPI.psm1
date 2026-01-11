@@ -13,4 +13,5 @@ foreach ($import in @($Public))
     }
 }
 Set-Alias get-at Get-AutotaskAPIResource
-Export-ModuleMember -Alias get-at
+Set-Alias set-at Set-AutotaskAPIResource
+Set-Alias new-at New-AutotaskAPIResource
