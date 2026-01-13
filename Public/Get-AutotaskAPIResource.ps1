@@ -28,7 +28,7 @@
 .OUTPUTS
     none
 .NOTES
-    TODO: Turns out some items have child URLS. figure that out.
+    Some entities have 'Child Access URLs'. For example, TicketNotesChild is the entity through which you create/update notes on Autotask Tickets.
 #>
 function Get-AutotaskAPIResource {
     [CmdletBinding()]
@@ -127,7 +127,7 @@ function Get-AutotaskAPIResource {
         # UDF metadata lookup
         $udfNames = @()
         
-        if (-not $Base) {
+        if (-not $Base-and $resource -notlike '*Child*') {
             try {
                 $udfNames = Get-AutotaskUdfNames -Resource $resource
                 Write-Verbose "User Defined Fields for $resource include: $($udfNames -join ', ')"
@@ -138,7 +138,7 @@ function Get-AutotaskAPIResource {
             }
         }
         else {
-            Write-Verbose "Skipping UDF metadata lookup for base resource '$resource'."
+            Write-Verbose "Skipping UDF metadata lookup for base or child type resource '$resource'."
         }
 
         # SimpleSearch handling
@@ -210,51 +210,51 @@ function Get-AutotaskAPIResource {
 
         if ($Base) {
             $path = $Script:BasePath
-            if (-not $path) {
-            $path = $ResourceURL.name
+            if (-not $path) { $path = $ResourceURL.name }
+            # Strip /query and any placeholders just in case
+            $path = $path -replace '/query$', ''
+            $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
         }
-
-        # Strip /query and any placeholders just in case
-        $path = $path -replace '/query$', ''
-        $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
-    }
-    else {
-
-        if ($ID) {
-            $ResourceURL = ("$($ResourceURL.name)" -replace '{parentid}', "$($ID)")
-        }
-        if ($ChildID) {
-            $ResourceURL = ("$($ResourceURL)/$ChildID")
-        }
-
-        if ($SearchQuery) {
-            switch ($Method) {
-                'GET' {
-                    $path = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
-                    $effectiveMethod = 'GET'
+        else {
+            # Parent ID substitution (works for {parentId}, {PARENTID}, etc.)
+            if ($ID) {
+                $path = $path -replace '\{parentid\}', "$ID"
+                $path = $path -replace '\{id\}', "$ID"  # some routes may use {id} rather than {parentId}
                 }
-                'POST' {
-                    $path = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
+                
+            # Child item path append
+                if ($ChildID) {
+                    $path = "$path/$ChildID"
+                }
+                # SearchQuery handling
+                if ($SearchQuery) {
+                    switch ($Method) {
+            'GET' {
+                $path = ($ResourceURL.name + "query?search=$SearchQuery") -replace '\{PARENTID\}', ''
+                $effectiveMethod = 'GET'
+            }
+            'POST' {
+                $path = ($ResourceURL.name + "query") -replace '\{PARENTID\}', ''
+                $Body = $SearchQuery
+                $effectiveMethod = 'POST'
+            }
+            Default {
+                if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048) {
+                    Write-Information "Using POST-Request as Request exceeded limit of 2100 characters. You can use -Method GET/POST to set a fixed Method."
+                    $path = ($ResourceURL.name + "query") -replace '\{PARENTID\}', ''
                     $Body = $SearchQuery
                     $effectiveMethod = 'POST'
                 }
-                Default {
-                    if (($Script:AutotaskBaseURI.Length + $ResourceURL.name.Length + $SearchQuery.Length + 15 + 120 + 100) -ge 2048) {
-                        Write-Information "Using POST-Request as Request exceeded limit of 2100 characters. You can use -Method GET/POST to set a fixed Method."
-                        $path = ("$($ResourceURL.name)query" -replace '{PARENTID}', '')
-                        $Body = $SearchQuery
-                        $effectiveMethod = 'POST'
-                    }
-                    else {
-                        $path = ("$($ResourceURL.name)query?search=$SearchQuery" -replace '{PARENTID}', '')
-                        $effectiveMethod = 'GET'
-                    }
+                else {
+                    $path = ($ResourceURL.name + "query?search=$SearchQuery") -replace '\{PARENTID\}', ''
+                    $effectiveMethod = 'GET'
                 }
             }
         }
     }
+}
 
-        $SetURI = "$($Script:AutotaskBaseURI)$path"
+$SetURI = "$($Script:AutotaskBaseURI)$path"
 
         try {
             do {
@@ -452,8 +452,9 @@ function Get-AutotaskAPIResource {
 
     # 401 Error - Possible bad auth or incorrect permissions
     if ($statusCode -eq 401) {
-        Write-Error ("Autotask API authentication/authorisation failed (HTTP 401 {0}) when calling '{1}'. " +
+        $401msg = ("Autotask API authentication/authorisation failed (HTTP 401 {0}) when calling '{1}'. " +
                      "Check the credentials and base URI configured via Add-AutotaskAPIAuth.") -f $statusDesc, $respUri
+        Write-Error $401msg
         return
     }
 
@@ -464,9 +465,10 @@ function Get-AutotaskAPIResource {
             $len     = [Math]::Min(300, $bodyText.Length)
             $snippet = $bodyText.Substring(0, $len)
         }
-        Write-Error ("Autotask API returned HTTP 404 (HTML) for '{0}'. " +
-                     "This usually indicates the Autotask service or route is unavailable, or the BaseURI is incorrect. " +
-                     "HTML snippet:`n{1}") -f $respUri, $snippet
+        $404msg = ("Autotask API returned HTTP 404 (HTML) for '{0}'. " +
+        "This may indicate that the Autotask service or route is unavailable, or the BaseURI is incorrect. " +
+        "HTML response snippet (if received) `n{1}") -f $respUri, $snippet
+        Write-Error $404msg
         return
     }
 
