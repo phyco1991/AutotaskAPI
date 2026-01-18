@@ -43,8 +43,12 @@ function Get-AutotaskAPIResource {
         [Parameter(ParameterSetName = 'SearchQuery', Mandatory = $true)]
         [String]$SearchQuery,
 
+        [Parameter(ParameterSetName = 'Where', Mandatory = $true)]
+        [String]$Where,
+
         [Parameter(ParameterSetName = 'SearchQuery', Mandatory = $false)]
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $false)]
+        [Parameter(ParameterSetName = 'Where', Mandatory = $false)]
         [ValidateSet("GET", "POST")]
         [String]$Method,
 
@@ -140,6 +144,12 @@ function Get-AutotaskAPIResource {
         else {
             Write-Verbose "Skipping UDF metadata lookup for base or child type resource '$resource'."
         }
+
+        # SQLSearch handling
+        if ($Where) {
+            $SearchQuery = ConvertTo-SearchQueryFromSQL -Where $Where
+            $Method = 'POST'  # avoids URL length limits
+            }
 
         # SimpleSearch handling
         if ($SimpleSearch) {
