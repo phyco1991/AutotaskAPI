@@ -555,9 +555,11 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
         if ($bodyText) {
             $len     = [Math]::Min(300, $bodyText.Length)
             $snippet = $bodyText.Substring(0, $len)
-            Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. " +
+            Write-Error (
+                ("Autotask API call to '{0}' failed with HTTP {1} {2}. " +
                          "Response body (first {3} chars):`n{4}") -f `
                         $respUri, $statusCode, $statusDesc, $len, $snippet
+            )
         }
         else {
             Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. {3}" -f `
