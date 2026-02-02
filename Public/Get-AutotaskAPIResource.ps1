@@ -296,20 +296,67 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                     Write-Host "=========================" -ForegroundColor DarkGray
                 }
 
-                switch ($effectiveMethod) {
-                    'GET' {
-                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
-                        $items = $response.Content | ConvertFrom-Json
-                    }
-                    'POST' {
-                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Post -Body $Body -ContentType 'application/json' -UseBasicParsing
-                        $items = $response.Content | ConvertFrom-Json
-                    }
-                    Default {
-                        $response = Invoke-WebRequest -Uri $SetURI -Headers $Headers -Method Get -UseBasicParsing
-                        $items = $response.Content | ConvertFrom-Json
-                    }
+                $methodToUse = $effectiveMethod
+                if ([string]::IsNullOrWhiteSpace($methodToUse)) { $methodToUse = 'GET' }
+                $req = [System.Net.HttpWebRequest]::Create($SetURI)
+                $req.Method  = $methodToUse
+                $req.Accept  = 'application/json'
+                $req.AutomaticDecompression = `
+                [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+                
+                # Apply headers (Autotask custom headers are OK here)
+                foreach ($k in $Headers.Keys) {
+                    try { $req.Headers[$k] = $Headers[$k] } catch {}
                 }
+                
+                # Write body for POST
+                if ($methodToUse -eq 'POST' -and $Body) {
+                    $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$Body)
+                    $req.ContentType   = 'application/json; charset=utf-8'
+                    $req.ContentLength = $bytes.Length
+                    $rs = $req.GetRequestStream()
+                    $rs.Write($bytes, 0, $bytes.Length)
+                    $rs.Close()
+                }
+                
+                $resp = $null
+                try {
+                    $resp = [System.Net.HttpWebResponse]$req.GetResponse()
+                }
+                catch [System.Net.WebException] {
+                    # HTTP errors still provide a Response object here
+                    $resp = $_.Exception.Response
+                    if (-not $resp) { throw }  # network/TLS/DNS etc.
+                    }
+                    
+                    # Read body text (works on success + error)
+                    $rawBody = $null
+                    try {
+                        $sr = New-Object System.IO.StreamReader($resp.GetResponseStream(), [System.Text.Encoding]::UTF8)
+                        $rawBody = $sr.ReadToEnd()
+                        $sr.Close()
+                    } catch {}
+                    
+                    # Convert to the shape your code expects
+                    $statusCode  = [int]$resp.StatusCode
+                    $statusDesc  = $resp.StatusDescription
+                    $respUri     = $resp.ResponseUri
+                    $contentType = $resp.ContentType
+                    $bodyText    = $rawBody
+                    
+                    # Error? Try parse JSON and throw so your existing catch block formats it
+                    if ($statusCode -lt 200 -or $statusCode -ge 300) {
+                        $ErrResp = $null
+                        if ($bodyText -and $bodyText.TrimStart().StartsWith('{')) {
+                            try { $ErrResp = $bodyText | ConvertFrom-Json } catch { $ErrResp = $null }
+                        }
+                        
+                        # Throw a simple exception; your existing catch will now have status/body populated
+                        throw "HTTP $statusCode $statusDesc"
+                    }
+                    
+                    # Success path
+                    $items = $bodyText | ConvertFrom-Json
 
                 $SetURI = $items.PageDetails.NextPageUrl
 
@@ -421,16 +468,13 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                 }
             } while ($null -ne $SetURI)
         }
-        catch {
-            $ErrResp    = $null
-            $bodyText   = $null
-            $statusCode = $null
-            $statusDesc = $null
-            $respUri    = $SetURI
-            $contentType = $null
-            
+        catch {         
             $ex   = $_.Exception
             $resp = $ex.Response
+
+            if (-not $ErrResp -and $bodyText -and $bodyText.TrimStart().StartsWith('{')) {
+                try { $ErrResp = $bodyText | ConvertFrom-Json } catch { $ErrResp = $null }
+            }
             
             if ($resp -is [System.Net.HttpWebResponse]) {
                 $statusCode  = [int]$resp.StatusCode
@@ -441,16 +485,33 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                 try {
                     $stream = $resp.GetResponseStream()
                     if ($stream) {
-                        $reader   = New-Object System.IO.StreamReader($stream)
-                        $bodyText = $reader.ReadToEnd()
-                        $reader.Close()
-                    }
-                }
-                catch {
-                    # ignore read failures, fall back to generic message
-                    }
+                        # If the API returns a compressed error payload, decompress it before reading
+                        $encoding = $null
+                        try { $encoding = $resp.Headers['Content-Encoding'] } catch {}
+                        
+                        switch -Regex ($encoding) {
+                            'gzip' {
+                                $stream = New-Object System.IO.Compression.GZipStream(
+                                    $stream, [System.IO.Compression.CompressionMode]::Decompress
+                                    )
+                                }
+                                'deflate' {
+                                    $stream = New-Object System.IO.Compression.DeflateStream(
+                                        $stream, [System.IO.Compression.CompressionMode]::Decompress
+                                        )
+                                    }
+                                }
+                                
+                                $reader   = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
+                                $bodyText = $reader.ReadToEnd()
+                                $reader.Close()
+                            }
+                        }
+                        catch {
+                            # ignore read failures, fall back to generic message
+                            }
                     # Try parse JSON error body if present
-                    if ($bodyText -and $bodyText.Trim().StartsWith('{')) {
+                    if ($bodyText -and $bodyText.TrimStart().StartsWith('{')) {
                         try {
                             $ErrResp = $bodyText | ConvertFrom-Json
                         }
@@ -484,7 +545,7 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
 
     # JSON error payload with .errors
     if ($ErrResp -and $ErrResp.errors) {
-        Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}. API errors: {3}" -f `
+        Write-Error ("Autotask API call to '{0}' failed with HTTP {1} {2}.`n`n==== API ERRORS ====`n{3}" -f `
                      $respUri, $statusCode, $statusDesc, ($ErrResp.errors -join '; '))
         return
     }
