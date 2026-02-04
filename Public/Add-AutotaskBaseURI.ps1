@@ -7,27 +7,11 @@
     PS C:\> Add-AutotaskBaseURI -BaseURI https://webservices2.autotask.net/atservicesrest
     Sets the autotask BaseURI to https://webservices2.autotask.net/atservicesrest
 .INPUTS
-    -BaseURI: examples of some working URLs in the following list:
-        "https://webservices2.autotask.net/atservicesrest",
-        "https://webservices11.autotask.net/atservicesrest",
+    -BaseURI: examples of some working URL formats in the following list (anything between 1-29 should work):
         "https://webservices1.autotask.net/atservicesrest",
-        "https://webservices17.autotask.net/atservicesrest",
-        "https://webservices3.autotask.net/atservicesrest",
-        "https://webservices14.autotask.net/atservicesrest",
-        "https://webservices5.autotask.net/atservicesrest",
-        "https://webservices15.autotask.net/atservicesrest",
-        "https://webservices4.autotask.net/atservicesrest",
-        "https://webservices16.autotask.net/atservicesrest",
-        "https://webservices6.autotask.net/atservicesrest",
+        "https://webservices29.autotask.net/atservicesrest",
         "https://prde.autotask.net/atservicesrest",
-        "https://pres.autotask.net/atservicesrest",
-        "https://webservices18.autotask.net/atservicesrest",
-        "https://webservices19.autotask.net/atservicesrest",
-        "https://webservices12.autotask.net/atservicesrest",
-        "https://webservices22.autotask.net/atservicesrest",
-        "https://webservices24.autotask.net/atservicesrest",
-        "https://webservices26.autotask.net/atservicesrest",
-        "https://webservices28.autotask.net/atservicesrest"
+        "https://pres.autotask.net/atservicesrest"
 .OUTPUTS
     none
 .NOTES

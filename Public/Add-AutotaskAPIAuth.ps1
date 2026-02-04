@@ -43,19 +43,19 @@ finally {
         $ZoneInfoResponse = Invoke-WebRequest -UseBasicParsing -Uri "https://webservices2.autotask.net/atservicesrest/$Version/zoneInformation?user=$($Script:AutotaskAuthHeader.UserName)"
         $ZoneInfo         = $ZoneInfoResponse.Content | ConvertFrom-Json
         $BaseURI = $ZoneInfo.url
-        write-host "Setting AutotaskBaseURI to $BaseURI using version $Version" -ForegroundColor green
+        write-host "Setting AutotaskBaseURI to $BaseURI using version $Version" -ForegroundColor Green
         Add-AutotaskBaseURI -BaseURI $BaseURI
     }
     catch {
-        write-host "Could not Retrieve baseuri. E-mail address might be incorrect. You can manually add the baseuri via the Add-AutotaskBaseURI cmdlet. $($_.Exception.Message)" -ForegroundColor red
+        write-host "Could not Retrieve baseuri. E-mail address might be incorrect. You can manually add the baseuri via the Add-AutotaskBaseURI cmdlet. $($_.Exception.Message)" -ForegroundColor Red
     }
 
     $testUri = ($BaseURI.TrimEnd('/')) + '/' + ($Version.Trim('/')) + '/Version'
-    Write-Host "Validating Autotask API authentication against $testUri"
+    Write-Host "Validating Autotask API authentication against $testUri" -ForegroundColor Green
 
     try {
         $null = Invoke-WebRequest -UseBasicParsing -Uri $testUri -Headers $Script:AutotaskAuthHeader -Method Get -TimeoutSec 20
-        Write-Host "Autotask API authentication validated successfully."
+        Write-Host "Autotask API authentication validated successfully." - -ForegroundColor Green
     }
     catch {
         $ex   = $_.Exception
