@@ -55,7 +55,7 @@ finally {
 
     try {
         $null = Invoke-WebRequest -UseBasicParsing -Uri $testUri -Headers $Script:AutotaskAuthHeader -Method Get -TimeoutSec 20
-        Write-Host "Autotask API authentication validated successfully." - -ForegroundColor Green
+        Write-Host "Autotask API authentication validated successfully." -ForegroundColor Green
     }
     catch {
         $ex   = $_.Exception
