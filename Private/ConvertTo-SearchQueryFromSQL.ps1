@@ -4,7 +4,7 @@
 .DESCRIPTION
     Allows you to structure a search query similar to a SQL query, to simplify queries where there are multiple AND/OR operators.
 .EXAMPLE
-    PS C:\> Get-AutotaskAPIResource -Resource Tickets -Where "ticketType IN (1,2,3) AND status -ne 5"
+    PS C:\> Get-AutotaskAPIResource -Resource Tickets -Where "ticketType IN '(1,2,3)' AND status -ne '5'"
 .INPUTS
     none
 .OUTPUTS
@@ -19,11 +19,15 @@ function ConvertTo-SearchQueryFromSQL {
         [string]$Where
     )
 
+    # Normalise NULL checks into single operator tokens so the parser can handle them
+    $Where = $Where -replace '(?i)\bIS\s+NOT\s+NULL\b', ' isnotnull'
+    $Where = $Where -replace '(?i)\bIS\s+NULL\b',      ' isnull'
+    
     # Tokeniser: identifiers, operators, strings, numbers, parens, commas, AND/OR
     $pattern = "(?<ws>\s+)|" +
            "(?<lpar>\()|(?<rpar>\))|(?<comma>,)|" +
            "(?<str>'[^']*'|""[^""]*"")|" +
-           "(?<op>\b(?:and|or|eq|ne|gt|ge|lt|le|like|contains|in)\b|-(?:and|or|eq|ne|gt|ge|lt|le|like|contains))|" +
+           "(?<op>\b(?:and|or|not|eq|ne|gt|ge|lt|le|like|contains|in|notin|notIn|isnull|isnotnull)\b|-(?:and|or|eq|ne|gt|ge|lt|le|like|contains|in|notin|isnull|isnotnull))|" +
            "(?<num>[+-]?\d+(?:\.\d+)?)|" +
            "(?<id>[A-Za-z_][A-Za-z0-9_\.]*)"
 
@@ -71,6 +75,9 @@ function Next {
             'le' { 'lte' }
             'contains' { 'contains' }
             'in' { 'in' }
+            'notin' { 'notIn' }
+            'isnull'    { 'notExist' }
+            'isnotnull' { 'exist' }
             'like' {
                 # Translate PowerShell wildcard * into Autotask-friendly ops
                 if ($val -is [string]) {
@@ -94,29 +101,54 @@ function Next {
         $opTok = Next
         if (-not $opTok) { throw "Unexpected end of query (expected operator after '$field')." }
 
-        if ($opTok.ToLowerInvariant().TrimStart('-') -eq 'in') {
-            if ((Peek) -ne '(') { throw "Expected '(' after IN." }
-            [void](Next) # '('
-
+        # Normalise operator
+        $opNorm = $opTok.ToLowerInvariant()
+        if ($opNorm.StartsWith('-')) { $opNorm = $opNorm.Substring(1) }
+        
+        # Handle SQL-style "NOT IN"
+        if ($opNorm -eq 'not') {
+            $nextOp = Peek
+            if (-not $nextOp -or $nextOp.ToLowerInvariant() -ne 'in') {
+                throw "Expected 'IN' after 'NOT'."
+            }
+            [void](Next)  # consume 'in'
+            $opNorm = 'notin'
+        }
+        
+        if ($opNorm -eq 'in' -or $opNorm -eq 'notin') {
+            if ((Peek) -ne '(') { throw "Expected '(' after $opTok." }
+            [void](Next)
+            
             $vals = @()
             while ($true) {
                 $t = Peek
-                if (-not $t) { throw "Unexpected end of query inside IN(...)." }
+                if (-not $t) { throw "Unexpected end of query inside $opTok(...)." }
                 if ($t -eq ')') { [void](Next); break }
                 if ($t -eq ',') { [void](Next); continue }
                 $vals += ToValue (Next)
             }
-
-            return @{ op='in'; field=$field; value=@($vals) }
+            
+            return @{
+                op    = if ($opNorm -eq 'notin') { 'notIn' } else { 'in' }
+                field = $field
+                value = @($vals)
+            }
         }
 
+        # Handle NULL-style operators which do not take a value
+        if ($opNorm -eq 'isnull' -or $opNorm -eq 'isnotnull') {
+            $op = MapOp $opTok $null
+            return @{ op = $op; field = $field }
+        }
+        
         $valTok = Next
         if (-not $valTok) { throw "Unexpected end of query (expected value after '$field $opTok')." }
-
+        
         $val = ToValue $valTok
         $op  = MapOp $opTok $val
-
+        
         return @{ op=$op; field=$field; value=$val }
+
     }
 
     function ParseFactor {
