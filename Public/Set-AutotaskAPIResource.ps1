@@ -48,7 +48,7 @@ function Set-AutotaskAPIResource {
 
         if ($resource -like "*child*" ) {
             if ( !$ParentId ) {
-                Write-Warning "You must specify a parentId when settings a child resource" 
+                Write-Warning "You must specify a ParentId value when setting a child resource" 
                 break 
             }
             $ResourceURL = $resourceURL -replace '{parentId}', $ParentId
@@ -67,13 +67,23 @@ function Set-AutotaskAPIResource {
             # where n is the number of non-null properties.  Grab the first one.
             $SendingBody = $MyBody[0] | ConvertTo-Json -Depth 10
             $EncodedSendingBody = [System.Text.Encoding]::UTF8.GetBytes($SendingBody)
-            Invoke-WebRequest -Uri "$($Script:AutotaskBaseURI)/$($ResourceURL)" -headers $Headers -Body $EncodedSendingBody -Method Patch -UseBasicParsing
+            $resp = Invoke-WebRequest -Uri "$($Script:AutotaskBaseURI)/$($ResourceURL)" -Headers $Headers -Body $EncodedSendingBody -Method Patch -UseBasicParsing
+            
+            if ($resp.StatusCode -eq 200) {
+                "Successful PATCH"
+                $resp.Content
+            }
+            else {
+                $resp.StatusCode
+                $resp.Content
+            }
         }
         catch {
             if ($psversiontable.psversion.major -lt 6) {
                 $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
                 $streamReader.BaseStream.Position = 0
-                if ($streamReader.ReadToEnd() -like '*{*') { $ErrResp = $streamReader.ReadToEnd() | ConvertFrom-Json }
+                $raw = $streamReader.ReadToEnd()
+                if ($raw -like '*{*') { $ErrResp = $raw | ConvertFrom-Json }
                 $streamReader.Close()
             }
             if ($ErrResp.errors) { 
