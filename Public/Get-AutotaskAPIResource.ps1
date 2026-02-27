@@ -337,21 +337,20 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                         $sr.Close()
                     } catch {}
                     
-                    # Convert to the shape your code expects
                     $statusCode  = [int]$resp.StatusCode
                     $statusDesc  = $resp.StatusDescription
                     $respUri     = $resp.ResponseUri
                     $contentType = $resp.ContentType
                     $bodyText    = $rawBody
                     
-                    # Error? Try parse JSON and throw so your existing catch block formats it
+                    # Error?
                     if ($statusCode -lt 200 -or $statusCode -ge 300) {
                         $ErrResp = $null
                         if ($bodyText -and $bodyText.TrimStart().StartsWith('{')) {
                             try { $ErrResp = $bodyText | ConvertFrom-Json } catch { $ErrResp = $null }
                         }
                         
-                        # Throw a simple exception; your existing catch will now have status/body populated
+                        # Throw a simple exception
                         throw "HTTP $statusCode $statusDesc"
                     }
                     
