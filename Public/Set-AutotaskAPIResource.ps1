@@ -1,4 +1,3 @@
-
 <#
 .SYNOPSIS
     Sets a resource in the API to the supplied object.
@@ -56,19 +55,36 @@ function Set-AutotaskAPIResource {
     }
     
     process {
-        $MyBody = New-Object -TypeName PSObject
-        $PSBoundParameters.body.PSObject.properties | Where-Object {$null -ne $_.Value} | ForEach-Object {Add-Member -InputObject $MyBody -NotePropertyMembers @{$_.Name=$_.Value}}
+        $MyBody = [pscustomobject]@{}
+        $bodyIn = $PSBoundParameters.body
         
-        if ($ID) {
-          $MyBody | Add-Member -NotePropertyMembers @{id=$ID} -Force
+        if ($null -ne $bodyIn) {
+            if ($bodyIn -is [System.Collections.IDictionary]) {
+                # Hashtable / dictionary: iterate entries
+                foreach ($kv in $bodyIn.GetEnumerator()) {
+                    if ($null -ne $kv.Value) {
+                        $MyBody | Add-Member -NotePropertyName $kv.Key -NotePropertyValue $kv.Value -Force
+                    }
+                }
+            }
+            else {
+                # Standard Behaviour
+                $bodyIn.PSObject.Properties | Where-Object { $null -ne $_.Value } | ForEach-Object {
+                $MyBody | Add-Member -NotePropertyName $_.Name -NotePropertyValue $_.Value -Force
+            }
         }
+    }
+
+    if ($ID) {
+        $MyBody | Add-Member -NotePropertyName 'id' -NotePropertyValue $ID -Force
+    }
         try {
             # Iterating through the property names above produces an array of n MyBody objects, all the same,
             # where n is the number of non-null properties.  Grab the first one.
-            $SendingBody = $MyBody[0] | ConvertTo-Json -Depth 10
+            $SendingBody = $MyBody | ConvertTo-Json -Depth 10 -Compress
             $EncodedSendingBody = [System.Text.Encoding]::UTF8.GetBytes($SendingBody)
             $resp = Invoke-WebRequest -Uri "$($Script:AutotaskBaseURI)/$($ResourceURL)" -Headers $Headers -Body $EncodedSendingBody -Method Patch -UseBasicParsing
-            
+            Write-Verbose "PATCH using body $SendingBody"
             if ($resp.StatusCode -eq 200) {
                 "Successful PATCH"
                 $resp.Content
