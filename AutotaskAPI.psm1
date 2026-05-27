@@ -12,7 +12,7 @@ foreach ($import in @($Public))
         Write-Error -Message "Failed to import function $($import.FullName): $_"
     }
 }
-Set-Alias get-at Get-AutotaskAPIResource
-Set-Alias set-at Set-AutotaskAPIResource
-Set-Alias new-at New-AutotaskAPIResource
-Set-Alias delete-at Remove-AutotaskAPIResource
+Set-Alias get-atr Get-AutotaskAPIResource
+Set-Alias set-atr Set-AutotaskAPIResource
+Set-Alias new-atr New-AutotaskAPIResource
+Set-Alias delete-atr Remove-AutotaskAPIResource

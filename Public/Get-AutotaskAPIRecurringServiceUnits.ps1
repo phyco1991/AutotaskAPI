@@ -4,10 +4,11 @@
 .DESCRIPTION
     Queries the Contracts, ContractServices, and ContractServiceUnits entities to obtain all services against recurring service contracts including their quantity, period type, and other key information.
 .EXAMPLE
-    PS C:\> Get-AutotaskRecurringServiceUnits | Select CompanyName,ContractName,ServiceName,ServiceCode,Units,PeriodType
+    PS C:\> Get-AutotaskRecurringServiceUnits | Select CompanyName,ContractName,offerName,ServiceCode,Units,PeriodType
     Provides a list of all services on active Recurring Services contracts, with quantity and period type.
 .INPUTS
     -CompanyId
+    -CompanyName
     -ContractId
     -IncludeInactiveContracts
     -ContractCategoryId
@@ -25,6 +26,9 @@ function Get-AutotaskAPIRecurringServiceUnits {
         # Limit dataset to specific Company IDs
         [int[]]$CompanyId,
 
+        # Limit dataset to specific Company Names
+        [string[]]$CompanyName,
+
         # Limit dataset to specific Contract IDs
         [int[]]$ContractId,
 
@@ -41,7 +45,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
         [switch]$PeriodTypeAsLabel,
 
         # Detail: Outputs all ContractServiceUnits entries returned on the query
-        # Summary: Outputs CompanyName, ContractName, ServiceName, ServiceMPN, ServiceQuantity, PeriodType, EffectiveDate for the 'most current' ContractServiceUnits entries returned on the query
+        # Summary: Outputs CompanyName, ContractName, offerName, MPN, Quantity, PeriodType, EffectiveDate for the 'most current' ContractServiceUnits entries returned on the query
         [ValidateSet('Detail', 'Summary')]
         [string]$Mode = 'Summary'
     )
@@ -92,6 +96,33 @@ function Get-AutotaskAPIRecurringServiceUnits {
         }
     }
 
+    # Contract filter by Company Name(s)
+    if ($CompanyName) {
+        $ResolvedCompanies = foreach ($Name in $CompanyName) {
+            Get-AutotaskAPIResource -Resource Companies -SimpleSearch "companyName eq $Name"
+        }
+        
+        $ResolvedCompanies = $ResolvedCompanies | Sort-Object id -Unique
+        
+        if (-not $ResolvedCompanies) {
+            throw "No matching companies were found in Autotask."
+        }
+        
+        $CompanyNameById = @{}
+        foreach ($c in $ResolvedCompanies) {
+            $CompanyNameById[[string]$c.id] = $c.companyName
+        }
+
+        $ResolvedCompanyIds = @($ResolvedCompanies.id)
+        
+        if ($CompanyId) {
+            $CompanyId = @($CompanyId) + $ResolvedCompanyIds
+        }
+        else {
+            $CompanyId = $ResolvedCompanyIds
+        }
+    }
+
     # Contract filter by ContractId(s)
     if ($ContractId) {
         foreach ($id in $ContractId) {
@@ -114,19 +145,35 @@ function Get-AutotaskAPIRecurringServiceUnits {
         Write-Verbose "Filtering Contracts where lastModifiedDateTime >= $changedSinceString"
     }
 
-    if (-not $contractFilter) {
+    if (-not $contractFilter -and -not $CompanyId) {
         Write-Verbose "No contract filter supplied; getting all contracts (this is unlikely with current defaults)."
         $contracts = Get-AutotaskAPIResource -Resource Contracts -Base -LocalTime
     }
-    else {
-        $contractQuery = @{ filter = $contractFilter } | ConvertTo-Json -Compress -Depth 10
-        $contracts     = Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery -LocalTime
-    }
-
-    if (-not $contracts) {
-        Write-Warning "No contracts returned, exiting."
-        return
-    }
+    elseif ($CompanyId) {
+        $contracts = foreach ($cid in @($CompanyId | Select-Object -Unique)) {
+            $thisFilter = @($contractFilter) + @(
+                @{
+                    field = 'companyID'
+                    op    = 'eq'
+                    value = $cid
+                }
+                )
+                
+                $contractQuery = @{ filter = $thisFilter } | ConvertTo-Json -Compress -Depth 10
+                Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery -LocalTime
+            }
+            
+            $contracts = $contracts | Sort-Object id -Unique
+        }
+        else {
+            $contractQuery = @{ filter = $contractFilter } | ConvertTo-Json -Compress -Depth 10
+            $contracts     = Get-AutotaskAPIResource -Resource Contracts -SearchQuery $contractQuery -LocalTime
+        }
+        
+        if (-not $contracts) {
+            Write-Warning "No contracts returned, exiting."
+            return
+        }
 
     # Index contracts by ID for quick lookup
     $contractIndex = @{}
@@ -248,8 +295,8 @@ function Get-AutotaskAPIRecurringServiceUnits {
             ContractServiceId   = $cs.id
             ContractServiceName = $cs.serviceName
             ServiceId      = $svc.id
-            ServiceName    = $svc.name
-            ServiceMPN     = $svc.manufacturerServiceProviderProductNumber
+            offerName      = $svc.name
+            MPN            = $svc.manufacturerServiceProviderProductNumber
             PeriodType     = $svc.periodType   # numeric or label depending on -PeriodTypeAsLabel switch
             Units          = $u.units
             EffectiveDate  = [datetime]$u.startDate
@@ -269,7 +316,7 @@ function Get-AutotaskAPIRecurringServiceUnits {
 
     # Summary mode
 
-    $grouped = $detailRows | Group-Object CompanyId, CompanyName, ContractId, ContractName, ServiceId, ServiceName, ServiceMPN, PeriodType
+    $grouped = $detailRows | Group-Object CompanyId, CompanyName, ContractId, ContractName, ServiceId, offerName, MPN, PeriodType
 
 $summaryRows = foreach ($g in $grouped) {
     # Find newest EffectiveDate in this group
@@ -282,13 +329,13 @@ $summaryRows = foreach ($g in $grouped) {
     [PSCustomObject]@{
         CompanyName                    = $any.CompanyName
         ContractName                   = $any.ContractName
-        ServiceName                    = $any.ServiceName
-        ServiceMPN                     = $any.ServiceMPN
-        ServiceQuantity                = $qty
+        offerName                      = $any.offerName
+        MPN                            = $any.MPN
+        Quantity                       = $qty
         PeriodType                     = $any.PeriodType
         EffectiveDate                  = $latestDate
     }
 }
 
-return $summaryRows | Sort-Object CompanyName, ContractName, ServiceName, ServiceMPN, PeriodType
+return $summaryRows | Sort-Object CompanyName, ContractName, offerName, MPN, PeriodType
 }

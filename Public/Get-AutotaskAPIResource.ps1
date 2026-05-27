@@ -337,6 +337,7 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                         $sr.Close()
                     } catch {}
                     
+                    # Convert
                     $statusCode  = [int]$resp.StatusCode
                     $statusDesc  = $resp.StatusDescription
                     $respUri     = $resp.ResponseUri
