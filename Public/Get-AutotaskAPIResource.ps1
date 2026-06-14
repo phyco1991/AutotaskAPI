@@ -25,6 +25,7 @@
     -ResolveLabels: Resolves picklist field IDs to their label value
     -LocalTime: Any date/time responses will be returned in the local user time, rather than the default UTC
     -Base: Queries the base endpoint without any search filter. Used for entities where this is required such as ZoneInformation
+    -ShowCapability: Outputs a list of capabilities and permissions for a specific API entity. This will show if the resource supports Query/Create/Update/Delete etc
 .OUTPUTS
     none
 .NOTES
@@ -72,7 +73,11 @@ function Get-AutotaskAPIResource {
 
         # Convert output from UTC to local user time & date values
         [Parameter()]
-        [switch]$LocalTime
+        [switch]$LocalTime,
+
+        # Outputs a list of capabilities and permissions for a specific API entity. This will show if the resource supports Query/Create/Update/Delete etc.
+        [Parameter(ParameterSetName = 'Capability', Mandatory = $true)]
+        [switch]$ShowCapability
     )
 
     DynamicParam {
@@ -224,8 +229,22 @@ function Get-AutotaskAPIResource {
             # Strip /query and any placeholders just in case
             $path = $path -replace '/query$', ''
             $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
-        }
-        else {
+        } elseif ($ShowCapability) {
+                    if ($Where -or $SimpleSearch -or $SearchQuery -or $ID) {
+                        throw "The ShowCapability parameter cannot be combined with other search parameters."
+                    } else {
+                        $uri = "$($Script:AutotaskBaseURI.TrimEnd('/'))/V1.0/$Resource/entityInformation"
+                        write-verbose "Getting Capability information from $uri"
+                        try {
+                            $resp = Invoke-WebRequest -Method GET -UseBasicParsing -Uri $uri -Headers $Script:AutotaskAuthHeader -ErrorAction Stop
+                            ($resp.Content | ConvertFrom-Json).info
+                            return
+                        }
+                        catch {
+                            throw "Autotask returned a non-JSON response for $uri (HTTP $($resp.StatusCode)). First 200 chars: $($resp.Content.Substring(0, [Math]::Min(200, $resp.Content.Length)))"
+                        }
+                    }
+        } else {
             # Parent ID substitution (works for {parentId}, {PARENTID}, etc.)
             if ($ID) {
                 $path = $path -replace '\{parentid\}', "$ID"
