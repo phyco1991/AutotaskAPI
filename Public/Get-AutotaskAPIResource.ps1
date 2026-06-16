@@ -25,7 +25,8 @@
     -ResolveLabels: Resolves picklist field IDs to their label value
     -LocalTime: Any date/time responses will be returned in the local user time, rather than the default UTC
     -Base: Queries the base endpoint without any search filter. Used for entities where this is required such as ZoneInformation
-    -ShowCapability: Outputs a list of capabilities and permissions for a specific API entity. This will show if the resource supports Query/Create/Update/Delete etc
+    -ListAll: Outputs a list of all API entities.
+    -ShowCapability: Outputs a list of capabilities and permissions for a specific API entity. This will show if the resource supports Query/Create/Update/Delete etc.
 .OUTPUTS
     none
 .NOTES
@@ -56,6 +57,7 @@ function Get-AutotaskAPIResource {
         [Parameter(ParameterSetName = 'SimpleSearch', Mandatory = $true)]
         [String]$SimpleSearch,
 
+        # Return the base response for an entity without any modification
         [Parameter(ParameterSetName = 'Base', Mandatory = $true)]
         [switch]$Base,
 
@@ -64,7 +66,7 @@ function Get-AutotaskAPIResource {
         [switch]$Udf,
 
         # Query the picklist index to resolve labels from value
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [switch]$ResolveLabels,
 
         # Generate a URL to open selected entities in the Autotask GUI
@@ -72,17 +74,24 @@ function Get-AutotaskAPIResource {
         [switch]$URL,
 
         # Convert output from UTC to local user time & date values
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [switch]$LocalTime,
 
         # Outputs a list of capabilities and permissions for a specific API entity. This will show if the resource supports Query/Create/Update/Delete etc.
         [Parameter(ParameterSetName = 'Capability', Mandatory = $true)]
-        [switch]$ShowCapability
+        [switch]$ShowCapability,
+
+        # Outputs a list of all API entities.
+        [Parameter(ParameterSetName = 'ListResources', Mandatory = $true)]
+        [switch]$ListAll
     )
 
     DynamicParam {
-        $Script:GetParameter
+    if ($PSBoundParameters.ContainsKey('ListAll')) {
+        return [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
     }
+    $Script:GetParameter
+}
 
     begin {
         if (!$Script:AutotaskAuthHeader -or !$Script:AutotaskBaseURI) {
@@ -90,36 +99,34 @@ function Get-AutotaskAPIResource {
             break
         }
 
-        $resource = $PSBoundParameters.resource
         $headers  = $Script:AutotaskAuthHeader
 
-        $Script:Index = $Script:Queries | Group-Object Index -AsHashTable -AsString
-        # First, get the group for this resource (by Index / tag)
-        $resourceGroup = $Script:Index[$resource]
-
-        if (-not $resourceGroup) {
-            $resourceGroup = $Script:Queries | Where-Object { $_.Get -eq $resource }
-        } 
-
-        if (-not $resourceGroup) {
-            throw "WARNING: Resource '$resource' not found in the index."
-        }
-
-        # Try match where .Get == resource
-        $ResourceURL = @($resourceGroup | Where-Object { $_.Get -eq $resource })[0]
-
-        # If that fails, fall back to the first entry for this index
-        if (-not $ResourceURL) {
-            $ResourceURL = @($resourceGroup)[0]
-        }
-
-        $Script:BasePath = $ResourceURL.name
-        $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
-
-        # Picklist metadata lookup
-        $picklistFields = @()
-        $picklistMap    = @{}
-        if ($ResolveLabels.IsPresent) {
+        if (!$ListAll) {
+            $resource = $PSBoundParameters.resource
+            $Script:Index = $Script:Queries | Group-Object Index -AsHashTable -AsString
+            # First, get the group for this resource (by Index / tag)
+            $resourceGroup = $Script:Index[$resource]
+            
+            if (-not $resourceGroup) {
+                $resourceGroup = $Script:Queries | Where-Object { $_.Get -eq $resource }
+            }
+            if (-not $resourceGroup) {
+                throw "WARNING: Resource '$resource' not found in the index."
+            }
+            # Try match where .Get == resource
+            $ResourceURL = @($resourceGroup | Where-Object { $_.Get -eq $resource })[0]
+            # If that fails, fall back to the first entry for this index
+            if (-not $ResourceURL) {
+                $ResourceURL = @($resourceGroup)[0]
+            }
+            
+            $Script:BasePath = $ResourceURL.name
+            $ResourceURL.name = $ResourceURL.name.replace("/query", "/{PARENTID}")
+            
+            # Picklist metadata lookup
+            $picklistFields = @()
+            $picklistMap    = @{}
+            if ($ResolveLabels.IsPresent) {
                 try {
                         $pickMeta       = Get-AutotaskPicklistMeta -Resource $resource
                         $picklistFields = $pickMeta.PicklistFields
@@ -132,25 +139,22 @@ function Get-AutotaskAPIResource {
                         $picklistMap    = @{}
                     }
                 }
-
-        # UDF metadata lookup
-        $udfNames = @()
-        
-        if (-not $Base-and $resource -notlike '*Child*') {
-            try {
-                $udfNames = Get-AutotaskUdfNames -Resource $resource
-                Write-Verbose "User Defined Fields for $resource include: $($udfNames -join ', ')"
+            # UDF metadata lookup
+            $udfNames = @()
+            if ((-not $ListAll -or -not $Base) -and $resource -notlike '*Child*') {
+                try {
+                    $udfNames = Get-AutotaskUdfNames -Resource $resource
+                    Write-Verbose "User Defined Fields for $resource include: $($udfNames -join ', ')"
+                }
+                catch {
+                    Write-Warning "WARNING: Could not build UDF index for '$resource': $_"
+                    $udfNames = @()
+                }
+            } else {
+                Write-Verbose "Skipping UDF metadata lookup for base or child type resource '$resource'."
             }
-            catch {
-                Write-Warning "WARNING: Could not build UDF index for '$resource': $_"
-                $udfNames = @()
-            }
-        }
-        else {
-            Write-Verbose "Skipping UDF metadata lookup for base or child type resource '$resource'."
-        }
 
-        # SQLSearch handling
+            # SQLSearch handling
         if ($Where) {
             $SearchQuery = ConvertTo-SearchQueryFromSQL -Where $Where
             $Method = 'POST'  # avoids URL length limits
@@ -210,9 +214,19 @@ function Get-AutotaskAPIResource {
                 Write-Verbose "Failed to parse/augment SearchQuery JSON for UDF detection: $_"
             }
         }
+        }
     }
 
     process {
+        if ($ListAll) {
+                    if ($Where -or $SimpleSearch -or $SearchQuery -or $ID) {
+                        throw "The ListAll parameter cannot be combined with other search parameters."
+                    } else {
+                        Get-AutotaskAPIResourceList
+                        return
+                    }
+        }
+
         if ($resource -like "*child*" -and $SearchQuery) {
             Write-Warning "You cannot perform a JSON Search on child items. To find child items, use the parent ID."
             break
@@ -223,13 +237,7 @@ function Get-AutotaskAPIResource {
         $Body = $null
         $effectiveMethod = if ([string]::IsNullOrWhiteSpace($Method)) { 'GET' } else { $Method }
 
-        if ($Base) {
-            $path = $Script:BasePath
-            if (-not $path) { $path = $ResourceURL.name }
-            # Strip /query and any placeholders just in case
-            $path = $path -replace '/query$', ''
-            $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
-        } elseif ($ShowCapability) {
+        if ($ShowCapability) {
                     if ($Where -or $SimpleSearch -or $SearchQuery -or $ID) {
                         throw "The ShowCapability parameter cannot be combined with other search parameters."
                     } else {
@@ -244,19 +252,28 @@ function Get-AutotaskAPIResource {
                             throw "Autotask returned a non-JSON response for $uri (HTTP $($resp.StatusCode)). First 200 chars: $($resp.Content.Substring(0, [Math]::Min(200, $resp.Content.Length)))"
                         }
                     }
-        } else {
-            # Parent ID substitution (works for {parentId}, {PARENTID}, etc.)
+        }
+        elseif ($Base) {
+            $path = $Script:BasePath
+            if (-not $path) { $path = $ResourceURL.name }
+            # Strip /query and any placeholders just in case
+            $path = $path -replace '/query$', ''
+            $path = $path -replace '\{PARENTID\}', '' -replace '\{parentid\}', '' -replace '\{id\}', ''
+        }
+        else {
+            # Parent ID substitution
             if ($ID) {
                 $path = $path -replace '\{parentid\}', "$ID"
-                $path = $path -replace '\{id\}', "$ID"  # some routes may use {id} rather than {parentId}
+                $path = $path -replace '\{id\}', "$ID"  # non-child entities use {id} rather than {parentId}
                 }
                 
             # Child item path append
-                if ($ChildID) {
+            if ($ChildID) {
                     $path = "$path/$ChildID"
                 }
-                # SearchQuery handling
-                if ($SearchQuery) {
+                
+            # SearchQuery handling
+            if ($SearchQuery) {
                     switch ($Method) {
             'GET' {
                 $path = ($ResourceURL.name + "query?search=$SearchQuery") -replace '\{PARENTID\}', ''
@@ -400,8 +417,8 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                                 if (-not $fieldMap) { continue }
                                 $label = $fieldMap["$rawValue"]
                                 if (-not $label) { continue }
-                                # Overwrite numeric picklist value output with the label
-                                $item.$fieldName = $label
+                                # Add label below numeric picklist value output
+                                $item | Add-Member -NotePropertyName "$($fieldName)Label" -NotePropertyValue $label -Force
                             }
                         }
                         if ($LocalTime) {
@@ -449,7 +466,8 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                                 if (-not $fieldMap) { continue }
                                 $label = $fieldMap["$rawValue"]
                                 if (-not $label) { continue }
-                                $item.$fieldName = $label
+                                # Add label below numeric picklist value output
+                                $item | Add-Member -NotePropertyName "$($fieldName)Label" -NotePropertyValue $label -Force
                             }
                         }
                         if ($LocalTime) {

@@ -73,8 +73,6 @@
         'Add-AutotaskBaseURI',
         'Add-AutotaskAPIAuth',
         'Get-AutotaskAPIResource',
-        'Get-AutotaskAPIResourceList',
-        'Get-AutotaskAPIResourceCapability',
         'Get-AutotaskAPIEntityInfo',
         'Get-AutotaskAPIPicklistValues',
         'Get-AutotaskAPIRecurringServiceUnits',
@@ -91,7 +89,7 @@
     VariablesToExport = '*'
     
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    AliasesToExport   = @('get-atr','set-atr','new-atr','delete-atr')
+    AliasesToExport   = @('get-atr','set-atr','new-atr','remove-atr')
     
     # DSC resources to export from this module
     # DscResourcesToExport = @()

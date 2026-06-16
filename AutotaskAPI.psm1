@@ -15,4 +15,4 @@ foreach ($import in @($Public))
 Set-Alias get-atr Get-AutotaskAPIResource
 Set-Alias set-atr Set-AutotaskAPIResource
 Set-Alias new-atr New-AutotaskAPIResource
-Set-Alias delete-atr Remove-AutotaskAPIResource
+Set-Alias remove-atr Remove-AutotaskAPIResource
