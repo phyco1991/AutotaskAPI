@@ -412,7 +412,6 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                                 # Skip if this object doesn't even have that property
                                 if (-not ($item.PSObject.Properties.Name -contains $fieldName)) { continue }
                                 $rawValue = $item.$fieldName
-                                if ($null -eq $rawValue -or $rawValue -eq '') { continue }
                                 $fieldMap = $picklistMap[$fieldName]
                                 if (-not $fieldMap) { continue }
                                 $label = $fieldMap["$rawValue"]
@@ -461,7 +460,6 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
                             foreach ($fieldName in $picklistFields) {
                                 if (-not ($item.PSObject.Properties.Name -contains $fieldName)) { continue }
                                 $rawValue = $item.$fieldName
-                                if ($null -eq $rawValue -or $rawValue -eq '') { continue }
                                 $fieldMap = $picklistMap[$fieldName]
                                 if (-not $fieldMap) { continue }
                                 $label = $fieldMap["$rawValue"]
