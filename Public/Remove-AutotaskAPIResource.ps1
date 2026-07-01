@@ -61,6 +61,15 @@ function Remove-AutotaskAPIResource {
             }
         }
         catch {
+            $ex   = $_.Exception
+            $statusCode  = [int]$resp.StatusCode
+
+            if ($statusCode -ge 200 -and $statusCode -lt 300) {
+                Write-Error "Autotask API call succeeded with HTTP $statusCode $statusDesc, but post-processing failed: $($ex.Message)"
+                Write-Error $_.ScriptStackTrace
+                return
+            }
+
             if ($psversiontable.psversion.major -lt 6) {
             $streamReader = [System.IO.StreamReader]::new($_.Exception.Response.GetResponseStream())
             $streamReader.BaseStream.Position = 0

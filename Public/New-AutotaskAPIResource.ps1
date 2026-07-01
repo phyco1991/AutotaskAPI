@@ -83,6 +83,12 @@ catch {
         $respUri     = $resp.ResponseUri
         $contentType = $resp.ContentType
 
+
+        if ($statusCode -ge 200 -and $statusCode -lt 300) {
+                Write-Error "Autotask API call succeeded with HTTP $statusCode $statusDesc, but post-processing failed: $($ex.Message)"
+                Write-Error $_.ScriptStackTrace
+                return
+            }
         # Read response body
         try {
             $stream = $resp.GetResponseStream()

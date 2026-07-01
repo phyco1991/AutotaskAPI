@@ -507,6 +507,12 @@ $SetURI = "$($Script:AutotaskBaseURI)$path"
             $ex   = $_.Exception
             $resp = $ex.Response
 
+            if ($statusCode -ge 200 -and $statusCode -lt 300) {
+                Write-Error "Autotask API call succeeded with HTTP $statusCode $statusDesc, but post-processing failed: $($ex.Message)"
+                Write-Error $_.ScriptStackTrace
+                return
+            }
+
             if (-not $ErrResp -and $bodyText -and $bodyText.TrimStart().StartsWith('{')) {
                 try { $ErrResp = $bodyText | ConvertFrom-Json } catch { $ErrResp = $null }
             }
